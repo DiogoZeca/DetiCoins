@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
+#include <stdint.h>
 #include <string.h>
+#include <immintrin.h>
 #include "../aad_data_types.h"
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
@@ -13,101 +15,128 @@
 volatile int stop_signal = 0;
 volatile int coins_found = 0;
 
-static u32_t rng_state[4];
+#define BATCH_SIZE_AVX 128
+#define SIMD_WIDTH_AVX 4
 
-static const u08_t mod95_lut[256] = {
-    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
-    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
-    96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
-    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32,
-    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
-    65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
-    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
-    97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-    113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
-    66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-    82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97
-};
+// Pre-allocated buffers
+static u32_t coin_batch[BATCH_SIZE_AVX][14] __attribute__((aligned(64)));
+static v4si simd_coins[BATCH_SIZE_AVX / SIMD_WIDTH_AVX][14] __attribute__((aligned(64)));
+static v4si simd_hashes[BATCH_SIZE_AVX / SIMD_WIDTH_AVX][5] __attribute__((aligned(64)));
+
+// SIMD RNG states
+static __m128i rng_state_avx[SIMD_WIDTH_AVX];
 
 static inline void init_rng_avx(void) {
-    u32_t seed = (u32_t)time(NULL);
-    for (int i = 0; i < 4; i++)
-        rng_state[i] = seed ^ (0x9e3779b9u + (u32_t)i * 0x12345678u);
+    uint64_t seed = (uint64_t)time(NULL);
+    for (int i = 0; i < SIMD_WIDTH_AVX; i++) {
+        uint64_t s = seed ^ (0x9e3779b97f4a7c15ULL + (uint64_t)i * 0x12345678ULL);
+        rng_state_avx[i] = _mm_set_epi64x((long long)s, (long long)(s ^ 0x6a09e667ULL));
+    }
 }
 
-static inline u08_t fast_random_byte_avx(int lane) {
-    rng_state[lane] = 1103515245u * rng_state[lane] + 12345u;
-    u08_t r = mod95_lut[(rng_state[lane] >> 16) & 0xFFu];
-    return (r == '\n') ? (u08_t)'X' : r;
+// Fast SIMD RNG (xorshift128)
+static inline __m128i xorshift128_avx(__m128i state) {
+    __m128i x = state;
+    x = _mm_xor_si128(x, _mm_slli_epi64(x, 23));
+    x = _mm_xor_si128(x, _mm_srli_epi64(x, 18));
+    x = _mm_xor_si128(x, _mm_srli_epi64(state, 5));
+    return _mm_add_epi64(x, state);
 }
 
-static inline void generate_4_coins_avx(v4si coin[14]) {
-    u32_t coin0[14], coin1[14], coin2[14], coin3[14];
+// Bulk coin generation
+static inline void generate_coin_batch_avx(void) {
+    const u32_t prefix[3] = { 0x49544544, 0x696F6320, 0x2032206E };
     
-    for (int lane = 0; lane < 4; lane++) {
-        u32_t *c_words = (lane == 0) ? coin0 : (lane == 1) ? coin1 : (lane == 2) ? coin2 : coin3;
-        
-        // Zero initialize
-        for (int i = 0; i < 14; i++)
-            c_words[i] = 0;
-        
-        u08_t *c = (u08_t*)c_words;
+    for (int idx = 0; idx < BATCH_SIZE_AVX; idx++) {
+        u32_t *coin = coin_batch[idx];
+        u08_t *c = (u08_t*)coin;
         
         // Prefix
-        c[0x03] = 'D';  c[0x02] = 'E';  c[0x01] = 'T';  c[0x00] = 'I';
-        c[0x07] = ' ';  c[0x06] = 'c';  c[0x05] = 'o';  c[0x04] = 'i';
-        c[0x0B] = 'n';  c[0x0A] = ' ';  c[0x09] = '2';  c[0x08] = ' ';
+        coin[0] = prefix[0];
+        coin[1] = prefix[1];
+        coin[2] = prefix[2];
         
         // Random payload
-        for (int i = 12; i < 54; i++)
-            c[i ^ 3] = fast_random_byte_avx(lane);
+        int lane = idx & 3;
+        rng_state_avx[lane] = xorshift128_avx(rng_state_avx[lane]);
         
-        // Padding - FIXED: direct word access
-        u08_t *w13 = (u08_t*)&c_words[13];
+        uint64_t rand_vals[2];
+        _mm_storeu_si128((__m128i*)rand_vals, rng_state_avx[lane]);
+        
+        int rand_idx = 0;
+        uint64_t rand_val = rand_vals[0];
+        
+        for (int i = 0; i < 42; i++) {
+            if (rand_idx == 0) {
+                if (i < 21) {
+                    rand_val = rand_vals[0];
+                } else if (i == 21) {
+                    rng_state_avx[lane] = xorshift128_avx(rng_state_avx[lane]);
+                    _mm_storeu_si128((__m128i*)rand_vals, rng_state_avx[lane]);
+                    rand_val = rand_vals[0];
+                } else {
+                    rand_val = rand_vals[1];
+                }
+                rand_idx = 8;
+            }
+            
+            u08_t b = (u08_t)(rand_val & 0xFF);
+            rand_val >>= 8;
+            rand_idx--;
+            
+            b = 32 + (b % 95);
+            c[(12 + i) ^ 3] = (b == '\n') ? 'X' : b;
+        }
+        
+        // Padding
+        u08_t *w13 = (u08_t*)&coin[13];
         w13[2] = '\n';
         w13[3] = 0x80;
-    }
-    
-    // Interleave
-    for (int i = 0; i < 14; i++) {
-        coin[i] = (v4si){ coin0[i], coin1[i], coin2[i], coin3[i] };
+        coin[10] = 0;
+        coin[11] = 0;
+        coin[12] = 0;
+        w13[0] = 0;
+        w13[1] = 0;
     }
 }
 
-static inline void check_and_save_4_coins_avx(v4si coin[14], v4si hash[5]) {
-    u32_t hash_scalar[4][5];
-    
-    for (int i = 0; i < 5; i++) {
-        hash_scalar[0][i] = hash[i][0];
-        hash_scalar[1][i] = hash[i][1];
-        hash_scalar[2][i] = hash[i][2];
-        hash_scalar[3][i] = hash[i][3];
-    }
-    
-    for (int lane = 0; lane < 4; lane++) {
-        if (hash_scalar[lane][0] == 0xAAD20250u) {
-            u32_t coin_scalar[14];
-            for (int i = 0; i < 14; i++)
-                coin_scalar[i] = coin[i][lane];
-            
-            coins_found++;
-            printf("\n💰 COIN #%d (Lane %d) | %08X %08X %08X %08X %08X\n",
-                   coins_found, lane,
-                   hash_scalar[lane][0], hash_scalar[lane][1],
-                   hash_scalar[lane][2], hash_scalar[lane][3],
-                   hash_scalar[lane][4]);
-            save_coin(coin_scalar);
+// Interleave batch into SIMD format
+static inline void interleave_batch_avx(void) {
+    for (int group = 0; group < BATCH_SIZE_AVX / SIMD_WIDTH_AVX; group++) {
+        int base = group * SIMD_WIDTH_AVX;
+        for (int word = 0; word < 14; word++) {
+            simd_coins[group][word] = (v4si){
+                coin_batch[base + 0][word],
+                coin_batch[base + 1][word],
+                coin_batch[base + 2][word],
+                coin_batch[base + 3][word]
+            };
         }
     }
 }
 
+// Check batch results
+static inline void check_batch_avx(void) {
+    for (int group = 0; group < BATCH_SIZE_AVX / SIMD_WIDTH_AVX; group++) {
+        for (int lane = 0; lane < SIMD_WIDTH_AVX; lane++) {
+            if ((u32_t)simd_hashes[group][0][lane] == 0xAAD20250u) {
+                int coin_idx = group * SIMD_WIDTH_AVX + lane;
+                coins_found++;
+                printf("\n💰 COIN #%d | Group:%d Lane:%d | %08X %08X %08X %08X %08X\n",
+                       coins_found, group, lane,
+                       simd_hashes[group][0][lane],
+                       simd_hashes[group][1][lane],
+                       simd_hashes[group][2][lane],
+                       simd_hashes[group][3][lane],
+                       simd_hashes[group][4][lane]);
+                save_coin(coin_batch[coin_idx]);
+            }
+        }
+    }
+}
+
+// Main mining loop
 static void mine_cpu_avx_coins(void) {
-    v4si coin[14], hash[5];
     unsigned long long attempts = 0ULL;
     time_t start = time(NULL), last_print = start;
     
@@ -115,13 +144,24 @@ static void mine_cpu_avx_coins(void) {
     init_rng_avx();
     
     while (!stop_signal) {
-        generate_4_coins_avx(coin);
-        sha1_avx(coin, hash);
-        attempts += 4;
+        // Generate batch
+        generate_coin_batch_avx();
         
-        check_and_save_4_coins_avx(coin, hash);
+        // Interleave
+        interleave_batch_avx();
         
-        if ((attempts & 0x3FFFFFu) == 0) {
+        // Hash all groups
+        for (int group = 0; group < BATCH_SIZE_AVX / SIMD_WIDTH_AVX; group++) {
+            sha1_avx(simd_coins[group], simd_hashes[group]);
+        }
+        
+        // Check results
+        check_batch_avx();
+        
+        attempts += BATCH_SIZE_AVX;
+        
+        // Progress
+        if ((attempts & 0xFFFFFu) == 0) {
             time_t now = time(NULL);
             if (difftime(now, last_print) >= 5.0) {
                 double elapsed = difftime(now, start);

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
+#include <stdint.h>
 #include "../aad_data_types.h"
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
@@ -12,83 +13,123 @@
 volatile int stop_signal = 0;
 volatile int coins_found = 0;
 
-static u32_t rng_state = 0;
+// Batch processing - generate many coins at once
+#define BATCH_SIZE_CPU 128
 
-static const u08_t mod95_lut[256] = {
-    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
-    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
-    96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
-    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32,
-    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
-    65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
-    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
-    97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-    113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
-    66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-    82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97
-};
+// Pre-allocated buffers (no malloc overhead!)
+static u32_t coin_batch[BATCH_SIZE_CPU][14] __attribute__((aligned(64)));
+static u32_t hash_batch[BATCH_SIZE_CPU][5] __attribute__((aligned(64)));
 
-static inline void init_rng(void) {
-    rng_state = (u32_t)time(NULL) ^ 0x9e3779b9u;
+// Fast xorshift64* RNG
+static uint64_t rng_state = 0;
+
+static inline void init_rng_cpu(void) {
+    rng_state = (uint64_t)time(NULL) ^ 0x9e3779b97f4a7c15ULL;
+    // Warm up
+    for (int i = 0; i < 10; i++) {
+        rng_state ^= rng_state >> 12;
+        rng_state ^= rng_state << 25;
+        rng_state ^= rng_state >> 27;
+    }
 }
 
-static inline u08_t fast_random_byte(void) {
-    rng_state = 1103515245u * rng_state + 12345u;
-    u08_t r = mod95_lut[(rng_state >> 16) & 0xFFu];
-    return (r == '\n') ? (u08_t)'X' : r;
+// Ultra-fast random byte generation
+static inline uint64_t xorshift64star(void) {
+    rng_state ^= rng_state >> 12;
+    rng_state ^= rng_state << 25;
+    rng_state ^= rng_state >> 27;
+    return rng_state * 0x2545F4914F6CDD1DULL;
 }
 
-static inline void generate_coin(u32_t coin[14]) {
-    // Zero initialize all 14 words (56 bytes total)
-    for (int i = 0; i < 14; i++)
-        coin[i] = 0;
+// Bulk coin generation - entire batch at once!
+static inline void generate_coin_batch_cpu(void) {
+    // Fixed prefix (12 bytes: "DETI coin 2 ")
+    const u32_t prefix[3] = {
+        0x49544544,  // "DETI"
+        0x696F6320,  // " coi"
+        0x2032206E   // "n 2 "
+    };
     
-    u08_t *c = (u08_t*)coin;
-    
-    // Prefix "DETI coin 2 " (12 bytes: 0-11) with XOR byte swapping
-    c[0x03] = 'D';  c[0x02] = 'E';  c[0x01] = 'T';  c[0x00] = 'I';
-    c[0x07] = ' ';  c[0x06] = 'c';  c[0x05] = 'o';  c[0x04] = 'i';
-    c[0x0B] = 'n';  c[0x0A] = ' ';  c[0x09] = '2';  c[0x08] = ' ';
-    
-    // Random payload (42 bytes: 12-53)
-    for (int i = 12; i < 54; i++)
-        c[i ^ 3] = fast_random_byte();
-    
-    // SHA1 padding - FIXED: Use direct word access to avoid out-of-bounds
-    // Bytes 54-55 are in word 13 (54 = 13*4+2, 55 = 13*4+3)
-    u08_t *w13 = (u08_t*)&coin[13];
-    w13[2] = '\n';   // Byte 54
-    w13[3] = 0x80;   // Byte 55 (padding marker)
+    for (int idx = 0; idx < BATCH_SIZE_CPU; idx++) {
+        u32_t *coin = coin_batch[idx];
+        u08_t *c = (u08_t*)coin;
+        
+        // Copy prefix
+        coin[0] = prefix[0];
+        coin[1] = prefix[1];
+        coin[2] = prefix[2];
+        
+        // Generate 42 random bytes (use 64-bit chunks for speed!)
+        uint64_t rand_val = xorshift64star();
+        int rand_idx = 0;
+        
+        for (int i = 0; i < 42; i++) {
+            if (rand_idx == 0) {
+                rand_val = xorshift64star();
+                rand_idx = 8;
+            }
+            
+            u08_t b = (u08_t)(rand_val & 0xFF);
+            rand_val >>= 8;
+            rand_idx--;
+            
+            b = 32 + (b % 95);
+            c[(12 + i) ^ 3] = (b == '\n') ? 'X' : b;
+        }
+        
+        // SHA1 padding
+        u08_t *w13 = (u08_t*)&coin[13];
+        w13[2] = '\n';
+        w13[3] = 0x80;
+        
+        // Zero padding
+        coin[10] = 0;
+        coin[11] = 0;
+        coin[12] = 0;
+        w13[0] = 0;
+        w13[1] = 0;
+    }
 }
 
+// Check all hashes in batch
+static inline void check_batch_cpu(void) {
+    for (int idx = 0; idx < BATCH_SIZE_CPU; idx++) {
+        if (hash_batch[idx][0] == 0xAAD20250u) {
+            coins_found++;
+            printf("\n💰 COIN #%d | Batch:%d | %08X %08X %08X %08X %08X\n",
+                   coins_found, idx,
+                   hash_batch[idx][0], hash_batch[idx][1],
+                   hash_batch[idx][2], hash_batch[idx][3],
+                   hash_batch[idx][4]);
+            save_coin(coin_batch[idx]);
+        }
+    }
+}
+
+// Main mining loop
 static void mine_cpu_coins(void) {
-    u32_t coin[14], hash[5];
     unsigned long long attempts = 0ULL;
     time_t start = time(NULL), last_print = start;
     
     printf("CPU scalar miner. Ctrl+C to stop.\n\n");
-    init_rng();
+    init_rng_cpu();
     
     while (!stop_signal) {
-        generate_coin(coin);
-        sha1(coin, hash);
-        attempts++;
+        // Generate entire batch
+        generate_coin_batch_cpu();
         
-        if (hash[0] == 0xAAD20250u) {
-            coins_found++;
-            double elapsed = difftime(time(NULL), start);
-            printf("\n💰 COIN #%d | %llu attempts | %.2fs | %08X %08X %08X %08X %08X\n",
-                   coins_found, attempts, elapsed, 
-                   hash[0], hash[1], hash[2], hash[3], hash[4]);
-            save_coin(coin);
+        // Hash all coins in batch
+        for (int idx = 0; idx < BATCH_SIZE_CPU; idx++) {
+            sha1(coin_batch[idx], hash_batch[idx]);
         }
         
-        if ((attempts & 0x3FFFFFu) == 0) {
+        // Check results
+        check_batch_cpu();
+        
+        attempts += BATCH_SIZE_CPU;
+        
+        // Progress update
+        if ((attempts & 0x7FFFFu) == 0) {
             time_t now = time(NULL);
             if (difftime(now, last_print) >= 5.0) {
                 double elapsed = difftime(now, start);

@@ -4,7 +4,8 @@
 
 # Compiler and flags
 CC := gcc
-CFLAGS_BASE := -O3 -std=c11 -Wall -Wextra -I. -march=native
+# ULTRA-OPTIMIZED FLAGS - Added -ffast-math, -funroll-loops, -mtune=native
+CFLAGS_BASE := -O3 -std=c11 -Wall -Wextra -I. -march=native -mtune=native -ffast-math -funroll-loops -fomit-frame-pointer
 LDFLAGS :=
 
 # Directories

@@ -3,9 +3,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <signal.h>
 #include <time.h>
-#include <string.h>
 #include "../aad_data_types.h"
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
@@ -13,65 +13,65 @@
 volatile int stop_signal = 0;
 volatile int coins_found = 0;
 
-static u32_t rng_state[8];
+// Professor's ultra-fast LCG RNG (much faster than xorshift!)
+static u32_t rng_state[8];  // One state per SIMD lane
 
-static const u08_t mod95_lut[256] = {
-    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
-    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
-    96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
-    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32,
-    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
-    65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
-    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
-    97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-    113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
-    66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-    82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97
-};
-
-static inline void init_rng_avx2(void) {
-    u32_t seed = (u32_t)time(NULL);
-    for (int i = 0; i < 8; i++)
-        rng_state[i] = seed ^ (0x9e3779b9u + (u32_t)i * 0x12345678u);
+static inline void init_lcg_rng(void) {
+    u32_t base = (u32_t)time(NULL);
+    for (int i = 0; i < 8; i++) {
+        rng_state[i] = base ^ (0x62815281u + i * 0x9e3779b9u);
+    }
 }
 
-static inline u08_t fast_random_byte_avx2(int lane) {
-    rng_state[lane] = 1103515245u * rng_state[lane] + 12345u;
-    u08_t r = mod95_lut[(rng_state[lane] >> 16) & 0xFFu];
-    return (r == '\n') ? (u08_t)'X' : r;
+// Professor's LCG: x = 3134521*x + 1, return top 9 bits
+static inline u08_t fast_random_byte(int lane) {
+    rng_state[lane] = 3134521u * rng_state[lane] + 1u;
+    return (u08_t)(rng_state[lane] >> 23);
 }
 
-static inline void generate_8_coins_avx2(v8si coin[14]) {
+// Map to printable ASCII [32-126], avoiding '\n'
+static inline u08_t random_printable_ascii(int lane) {
+    u08_t b = fast_random_byte(lane);
+    b = 32 + (b % 95);  // [32, 126]
+    return (b == '\n') ? 'X' : b;
+}
+
+// ULTIMATE OPTIMIZED: Generate 8 coins in parallel with professor's RNG
+static inline void generate_8_coins_avx2_ultimate(v8si coin[14]) {
+    const u32_t prefix[3] = {
+        0x44455449u,  // 'D','E','T','I'
+        0x20636F69u,  // ' ','c','o','i'
+        0x6E203220u   // 'n',' ','2',' '
+    };
+    
     u32_t coins[8][14];
     
+    // Generate all 8 coins in parallel
     for (int lane = 0; lane < 8; lane++) {
-        // Zero initialize
-        for (int i = 0; i < 14; i++)
-            coins[lane][i] = 0;
-        
         u08_t *c = (u08_t*)coins[lane];
         
-        // Prefix
-        c[0x03] = 'D';  c[0x02] = 'E';  c[0x01] = 'T';  c[0x00] = 'I';
-        c[0x07] = ' ';  c[0x06] = 'c';  c[0x05] = 'o';  c[0x04] = 'i';
-        c[0x0B] = 'n';  c[0x0A] = ' ';  c[0x09] = '2';  c[0x08] = ' ';
+        // Set prefix
+        coins[lane][0] = prefix[0];
+        coins[lane][1] = prefix[1];
+        coins[lane][2] = prefix[2];
         
-        // Random payload
-        for (int i = 12; i < 54; i++)
-            c[i ^ 3] = fast_random_byte_avx2(lane);
+        // Generate 42 random bytes using professor's fast RNG
+        for (int i = 0; i < 42; i++) {
+            c[((12 + i) ^ 3)] = random_printable_ascii(lane);
+        }
         
-        // Padding - FIXED: direct word access
-        u08_t *w13 = (u08_t*)&coins[lane][13];
-        w13[2] = '\n';
-        w13[3] = 0x80;
+        // Padding
+        c[54 ^ 3] = '\n';
+        c[55 ^ 3] = 0x80;
+        
+        // Zero tail
+        coins[lane][10] = 0;
+        coins[lane][11] = 0;
+        coins[lane][12] = 0;
+        coins[lane][13] &= 0xFF00FFFFu;
     }
     
-    // Interleave
+    // Interleave into SIMD vectors
     for (int i = 0; i < 14; i++) {
         coin[i] = (v8si){
             coins[0][i], coins[1][i], coins[2][i], coins[3][i],
@@ -80,22 +80,19 @@ static inline void generate_8_coins_avx2(v8si coin[14]) {
     }
 }
 
-static inline void check_and_save_8_coins_avx2(v8si coin[14], v8si hash[5]) {
-    u32_t hash_scalar[8][5];
+// Fast checking using AVX2 comparison
+static inline void check_and_save_8_coins_avx2_fast(v8si coin[14], v8si hash[5]) {
+    // Fast SIMD check: compare all 8 lanes at once
+    __m256i target = _mm256_set1_epi32(0xAAD20250u);
+    __m256i hash0 = (__m256i)hash[0];
+    __m256i cmp = _mm256_cmpeq_epi32(hash0, target);
+    int mask = _mm256_movemask_epi8(cmp);
     
-    for (int i = 0; i < 5; i++) {
-        hash_scalar[0][i] = hash[i][0];
-        hash_scalar[1][i] = hash[i][1];
-        hash_scalar[2][i] = hash[i][2];
-        hash_scalar[3][i] = hash[i][3];
-        hash_scalar[4][i] = hash[i][4];
-        hash_scalar[5][i] = hash[i][5];
-        hash_scalar[6][i] = hash[i][6];
-        hash_scalar[7][i] = hash[i][7];
-    }
+    if (mask == 0) return;  // Fast path: no matches
     
+    // Slow path: extract and save matching coins
     for (int lane = 0; lane < 8; lane++) {
-        if (hash_scalar[lane][0] == 0xAAD20250u) {
+        if (hash[0][lane] == 0xAAD20250u) {
             u32_t coin_scalar[14];
             for (int i = 0; i < 14; i++)
                 coin_scalar[i] = coin[i][lane];
@@ -103,9 +100,8 @@ static inline void check_and_save_8_coins_avx2(v8si coin[14], v8si hash[5]) {
             coins_found++;
             printf("\n💰 COIN #%d (Lane %d) | %08X %08X %08X %08X %08X\n",
                    coins_found, lane,
-                   hash_scalar[lane][0], hash_scalar[lane][1],
-                   hash_scalar[lane][2], hash_scalar[lane][3],
-                   hash_scalar[lane][4]);
+                   hash[0][lane], hash[1][lane],
+                   hash[2][lane], hash[3][lane], hash[4][lane]);
             save_coin(coin_scalar);
         }
     }
@@ -114,21 +110,27 @@ static inline void check_and_save_8_coins_avx2(v8si coin[14], v8si hash[5]) {
 static void mine_cpu_avx2_coins(void) {
     v8si coin[14], hash[5];
     unsigned long long attempts = 0ULL;
-    time_t start = time(NULL), last_print = start;
+    time_t start, last_print;
     
-    printf("AVX2 miner (8-way SIMD). Ctrl+C to stop.\n\n");
-    init_rng_avx2();
+    init_lcg_rng();
+    start = time(NULL);
+    last_print = start;
+    
+    printf("AVX2 miner (8-way SIMD). Ctrl+C to stop.\n");
+    printf("Target: 50+ M/s\n\n");
     
     while (!stop_signal) {
-        generate_8_coins_avx2(coin);
+        // Tight loop: generate -> hash -> check
+        generate_8_coins_avx2_ultimate(coin);
         sha1_avx2(coin, hash);
+        check_and_save_8_coins_avx2_fast(coin, hash);
+        
         attempts += 8;
         
-        check_and_save_8_coins_avx2(coin, hash);
-        
-        if ((attempts & 0x3FFFFFu) == 0) {
+        // Progress every ~32M hashes
+        if ((attempts & 0x1FFFFFF) == 0) {
             time_t now = time(NULL);
-            if (difftime(now, last_print) >= 5.0) {
+            if (difftime(now, last_print) >= 3.0) {
                 double elapsed = difftime(now, start);
                 printf("[%.1fs] %lluM @ %.2fM/s | Coins:%d\n",
                        elapsed, attempts/1000000ULL,
