@@ -12,47 +12,43 @@
 volatile int stop_signal = 0;
 volatile int coins_found = 0;
 
-// Fast inline LCG random number generator
-static u32_t rng_state = 0;
-
-static inline void init_rng(void) {
-    rng_state = (u32_t)time(NULL) ^ 0x9e3779b9;
-}
-
-static inline u08_t fast_random_byte(void) {
-    rng_state = 3134521u * rng_state + 1u;
-    return (u08_t)((rng_state >> 23) % 95 + 32);
-}
-
+// Generate 4 interleaved coins for AVX (4-way SIMD)
 static inline void generate_4_coins_avx(v4si coin[14]) {
     static const char prefix[12] = { 'D','E','T','I',' ','c','o','i','n',' ','2',' ' };
+    
+    // Generate 4 separate coins
     u32_t coin0[14], coin1[14], coin2[14], coin3[14];
     
     for (int lane = 0; lane < 4; lane++) {
         u32_t *c_words = (lane == 0) ? coin0 : (lane == 1) ? coin1 : (lane == 2) ? coin2 : coin3;
         u08_t *c = (u08_t*)c_words;
         
+        // Write prefix
         for (int i = 0; i < 12; i++)
             c[i ^ 3] = (u08_t)prefix[i];
         
+        // Generate random payload
         for (int i = 12; i < 54; i++) {
-            u08_t r = fast_random_byte();  // ← FAST RNG
+            int r = (rand() % 95) + 32;
             if (r == '\n') r = 'X';
-            c[i ^ 3] = r;
+            c[i ^ 3] = (u08_t)r;
         }
         
         c[54 ^ 3] = '\n';
         c[55 ^ 3] = 0x80;
     }
     
+    // Interleave 4 coins into SIMD vectors
     for (int i = 0; i < 14; i++) {
         coin[i] = (v4si){ coin0[i], coin1[i], coin2[i], coin3[i] };
     }
 }
 
+// Check if any of the 4 hashes match and save valid coins
 static inline void check_and_save_4_coins_avx(v4si coin[14], v4si hash[5]) {
     u32_t hash_scalar[4][5];
     
+    // Extract hashes from SIMD vectors
     for (int i = 0; i < 5; i++) {
         hash_scalar[0][i] = hash[i][0];
         hash_scalar[1][i] = hash[i][1];
@@ -60,8 +56,10 @@ static inline void check_and_save_4_coins_avx(v4si coin[14], v4si hash[5]) {
         hash_scalar[3][i] = hash[i][3];
     }
     
+    // Check each lane
     for (int lane = 0; lane < 4; lane++) {
         if (hash_scalar[lane][0] == 0xAAD20250) {
+            // Extract coin from interleaved data
             u32_t coin_scalar[14];
             for (int i = 0; i < 14; i++)
                 coin_scalar[i] = coin[i][lane];
@@ -83,15 +81,15 @@ static void mine_cpu_avx_coins(void) {
     time_t start = time(NULL), last_print = start;
     
     printf("AVX miner (4-way SIMD). Ctrl+C to stop.\n\n");
-    init_rng();  // ← Initialize RNG
     
     while (!stop_signal) {
         generate_4_coins_avx(coin);
         sha1_avx(coin, hash);
-        attempts += 4;
+        attempts += 4;  // 4 hashes per iteration
         
         check_and_save_4_coins_avx(coin, hash);
         
+        // Progress every 5 seconds
         if ((attempts & 0xFFFFF) == 0) {
             time_t now = time(NULL);
             if (difftime(now, last_print) >= 5.0) {

@@ -12,18 +12,6 @@
 volatile int stop_signal = 0;
 volatile int coins_found = 0;
 
-// Fast inline LCG random number generator
-static u32_t rng_state = 0;
-
-static inline void init_rng(void) {
-    rng_state = (u32_t)time(NULL) ^ 0x9e3779b9;
-}
-
-static inline u08_t fast_random_byte(void) {
-    rng_state = 3134521u * rng_state + 1u;
-    return (u08_t)((rng_state >> 23) % 95 + 32);
-}
-
 static inline void generate_coin(u32_t coin[14]) {
     static const char prefix[12] = { 'D','E','T','I',' ','c','o','i','n',' ','2',' ' };
     u08_t *c = (u08_t*)coin;
@@ -32,9 +20,9 @@ static inline void generate_coin(u32_t coin[14]) {
         c[i ^ 3] = (u08_t)prefix[i];
     
     for (int i = 12; i < 54; i++) {
-        u08_t r = fast_random_byte();
+        int r = (rand() % 95) + 32;
         if (r == '\n') r = 'X';
-        c[i ^ 3] = r;
+        c[i ^ 3] = (u08_t)r;
     }
     
     c[54 ^ 3] = '\n';
@@ -45,8 +33,6 @@ static void mine_cpu_coins(void) {
     u32_t coin[14], hash[5];
     unsigned long long attempts = 0ULL;
     time_t start = time(NULL), last_print = start;
-    
-    init_rng();  // ← Initialize RNG
     
     while (!stop_signal) {
         generate_coin(coin);

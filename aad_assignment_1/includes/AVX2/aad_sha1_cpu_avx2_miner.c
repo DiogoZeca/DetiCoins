@@ -1,5 +1,6 @@
 #include <time.h>
-#include "aad_cpu_avx_miner.h"
+#include <signal.h>
+#include "aad_cpu_avx2_miner.h"
 
 void handle_sigint(int sig) {
     (void)sig;
@@ -8,17 +9,15 @@ void handle_sigint(int sig) {
 }
 
 int main(void) {
-    #ifndef __AVX__
-    fprintf(stderr, "ERROR: AVX not available. Compile with -mavx\n");
+    #ifndef __AVX2__
+    fprintf(stderr, "ERROR: AVX2 not available. Compile with -mavx2\n");
     return 1;
     #endif
     
     signal(SIGINT, handle_sigint);
-    srand((unsigned int)time(NULL));
     
-    mine_cpu_avx_coins();
+    mine_cpu_avx2_coins();
     
     save_coin(NULL);
     return 0;
 }
-                

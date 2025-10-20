@@ -51,10 +51,10 @@ static double wall_time_delta(void)
 __attribute__((unused))
 u08_t random_byte(void)
 {
-  static u32_t x = 0u;
+  static u32_t x = 0x62815281u;
 
   x = 3134521u * x + 1u;
-  return (u08_t)x;
+  return (u08_t)(x >> 23);
 }
 
 

@@ -1,5 +1,5 @@
-#ifndef AAD_CPU_AVX_MINER_H
-#define AAD_CPU_AVX_MINER_H
+#ifndef AAD_CPU_AVX2_MINER_H
+#define AAD_CPU_AVX2_MINER_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,19 +24,23 @@ static inline u08_t fast_random_byte(void) {
     return (u08_t)((rng_state >> 23) % 95 + 32);
 }
 
-static inline void generate_4_coins_avx(v4si coin[14]) {
+// Generate 8 interleaved coins for AVX2 (8-way SIMD)
+static inline void generate_8_coins_avx2(v8si coin[14]) {
     static const char prefix[12] = { 'D','E','T','I',' ','c','o','i','n',' ','2',' ' };
-    u32_t coin0[14], coin1[14], coin2[14], coin3[14];
     
-    for (int lane = 0; lane < 4; lane++) {
-        u32_t *c_words = (lane == 0) ? coin0 : (lane == 1) ? coin1 : (lane == 2) ? coin2 : coin3;
-        u08_t *c = (u08_t*)c_words;
+    // Generate 8 separate coins
+    u32_t coins[8][14];
+    
+    for (int lane = 0; lane < 8; lane++) {
+        u08_t *c = (u08_t*)coins[lane];
         
+        // Write prefix with XOR mapping
         for (int i = 0; i < 12; i++)
             c[i ^ 3] = (u08_t)prefix[i];
         
+        // Generate random payload using fast RNG
         for (int i = 12; i < 54; i++) {
-            u08_t r = fast_random_byte();  // ← FAST RNG
+            u08_t r = fast_random_byte();
             if (r == '\n') r = 'X';
             c[i ^ 3] = r;
         }
@@ -45,23 +49,35 @@ static inline void generate_4_coins_avx(v4si coin[14]) {
         c[55 ^ 3] = 0x80;
     }
     
+    // Interleave 8 coins into SIMD vectors
     for (int i = 0; i < 14; i++) {
-        coin[i] = (v4si){ coin0[i], coin1[i], coin2[i], coin3[i] };
+        coin[i] = (v8si){
+            coins[0][i], coins[1][i], coins[2][i], coins[3][i],
+            coins[4][i], coins[5][i], coins[6][i], coins[7][i]
+        };
     }
 }
 
-static inline void check_and_save_4_coins_avx(v4si coin[14], v4si hash[5]) {
-    u32_t hash_scalar[4][5];
+// Check if any of the 8 hashes match and save valid coins
+static inline void check_and_save_8_coins_avx2(v8si coin[14], v8si hash[5]) {
+    u32_t hash_scalar[8][5];
     
+    // Extract hashes from SIMD vectors
     for (int i = 0; i < 5; i++) {
         hash_scalar[0][i] = hash[i][0];
         hash_scalar[1][i] = hash[i][1];
         hash_scalar[2][i] = hash[i][2];
         hash_scalar[3][i] = hash[i][3];
+        hash_scalar[4][i] = hash[i][4];
+        hash_scalar[5][i] = hash[i][5];
+        hash_scalar[6][i] = hash[i][6];
+        hash_scalar[7][i] = hash[i][7];
     }
     
-    for (int lane = 0; lane < 4; lane++) {
+    // Check each lane for valid coin
+    for (int lane = 0; lane < 8; lane++) {
         if (hash_scalar[lane][0] == 0xAAD20250) {
+            // Extract coin from interleaved data
             u32_t coin_scalar[14];
             for (int i = 0; i < 14; i++)
                 coin_scalar[i] = coin[i][lane];
@@ -77,21 +93,22 @@ static inline void check_and_save_4_coins_avx(v4si coin[14], v4si hash[5]) {
     }
 }
 
-static void mine_cpu_avx_coins(void) {
-    v4si coin[14], hash[5];
+static void mine_cpu_avx2_coins(void) {
+    v8si coin[14], hash[5];
     unsigned long long attempts = 0ULL;
     time_t start = time(NULL), last_print = start;
     
-    printf("AVX miner (4-way SIMD). Ctrl+C to stop.\n\n");
-    init_rng();  // ← Initialize RNG
+    printf("AVX2 miner (8-way SIMD). Ctrl+C to stop.\n\n");
+    init_rng();  // Initialize fast RNG
     
     while (!stop_signal) {
-        generate_4_coins_avx(coin);
-        sha1_avx(coin, hash);
-        attempts += 4;
+        generate_8_coins_avx2(coin);
+        sha1_avx2(coin, hash);
+        attempts += 8;  // 8 hashes per iteration
         
-        check_and_save_4_coins_avx(coin, hash);
+        check_and_save_8_coins_avx2(coin, hash);
         
+        // Progress report every 5 seconds
         if ((attempts & 0xFFFFF) == 0) {
             time_t now = time(NULL);
             if (difftime(now, last_print) >= 5.0) {
@@ -114,4 +131,4 @@ static void mine_cpu_avx_coins(void) {
     printf("======================================\n");
 }
 
-#endif
+#endif  // AAD_CPU_AVX2_MINER_H
