@@ -1,4 +1,5 @@
 #include <time.h>
+#include <signal.h>
 #include "aad_cpu_avx_miner.h"
 
 void handle_sigint(int sig) {
@@ -14,11 +15,9 @@ int main(void) {
     #endif
     
     signal(SIGINT, handle_sigint);
-    srand((unsigned int)time(NULL));
     
     mine_cpu_avx_coins();
     
     save_coin(NULL);
     return 0;
 }
-                
