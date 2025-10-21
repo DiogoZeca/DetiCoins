@@ -3,18 +3,19 @@
 # =========================================
 
 # Compiler and flags
-CC := gcc
-# ULTRA-OPTIMIZED FLAGS - Added -ffast-math, -funroll-loops, -mtune=native
-CFLAGS_BASE := -O3 -std=c11 -Wall -Wextra -I. -march=native -mtune=native -ffast-math -funroll-loops -fomit-frame-pointer
+CC := cc
+# ULTIMATE-OPTIMIZED FLAGS - Added -finline-functions for aggressive inlining
+# CFLAGS_BASE := -O3 -std=c11 -Wall -Wextra -I. -march=native -mtune=native -ffast-math -funroll-loops -finline-functions -fomit-frame-pointer
+CFLAGS_BASE := -O3 -std=c11 -D_POSIX_C_SOURCE=199309L -Wall -Wextra -I. -march=native -mtune=native -ffast-math -funroll-loops -finline-functions -fomit-frame-pointer
 LDFLAGS :=
 
 # Directories
-CPU_DIR := CPU
-AVX_DIR := AVX
-AVX2_DIR := AVX2
-AVX512F_DIR := AVX512F
-SIMD_OPENMP_DIR := SIMD_OpenMP
-CUDA_DIR := CUDA
+CPU_DIR := ./CPU
+AVX_DIR := ./AVX
+AVX2_DIR := ./AVX2
+AVX512F_DIR := ./AVX512
+SIMD_OPENMP_DIR := ./SIMD_OpenMP
+CUDA_DIR := ./CUDA
 BIN_DIR := ../bin
 
 # Ensure bin directory exists
@@ -41,7 +42,7 @@ help:
 	@echo "Run targets:"
 	@echo "  make run-cpu      - Build and run CPU scalar miner"
 	@echo "  make run-avx      - Build and run AVX miner"
-	@echo "  make run-avx2     - Build and run AVX2 miner"
+	@echo "  make run-avx2     - Build and run AVX2 miner ⚡"
 	@echo "  make run-avx512   - Build and run AVX512 miner"
 	@echo "  make run-simd     - Build and run SIMD+OpenMP miner"
 	@echo ""
@@ -67,7 +68,7 @@ avx: $(AVX_DIR)/aad_sha1_cpu_avx_miner.c $(AVX_DIR)/aad_cpu_avx_miner.h
 	@echo "✓ AVX miner built: $(BIN_DIR)/avx_miner"
 
 # =========================================
-# AVX2 miner (8-way SIMD, single-threaded)
+# AVX2 miner (8-way SIMD, single-threaded) ⚡ BEST SINGLE-CORE
 # =========================================
 avx2: $(AVX2_DIR)/aad_sha1_cpu_avx2_miner.c $(AVX2_DIR)/aad_cpu_avx2_miner.h
 	@echo "Building AVX2 miner..."
@@ -83,7 +84,7 @@ avx512: $(AVX512F_DIR)/aad_sha1_cpu_avx512_miner.c $(AVX512F_DIR)/aad_cpu_avx512
 	@echo "✓ AVX512 miner built: $(BIN_DIR)/avx512_miner"
 
 # =========================================
-# SIMD + OpenMP hybrid (BEST PERFORMANCE)
+# SIMD + OpenMP hybrid (BEST MULTI-CORE PERFORMANCE)
 # =========================================
 simd_openmp: $(SIMD_OPENMP_DIR)/aad_cpu_simd_miner.c $(SIMD_OPENMP_DIR)/aad_cpu_simd_miner.h
 	@echo "Building SIMD+OpenMP miner..."
@@ -98,6 +99,9 @@ all_miners: cpu avx avx2 simd_openmp
 	@echo "============================================"
 	@echo "✓ All miners built successfully!"
 	@echo "============================================"
+	@echo ""
+	@echo "Recommended for single-core: ./$(BIN_DIR)/avx2_miner"
+	@echo "Recommended for multi-core:  ./$(BIN_DIR)/simd_openmp_miner"
 
 # =========================================
 # Run targets

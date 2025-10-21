@@ -1,111 +1,99 @@
 #ifndef AAD_CPU_MINER_H
 #define AAD_CPU_MINER_H
 
+#include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <signal.h>
+#include <string.h>
 #include <time.h>
 #include "../aad_data_types.h"
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
 
-volatile int stop_signal = 0;
-volatile int coins_found = 0;
+static volatile int stop_signal = 0;
+static volatile int coins_found = 0;
 
-// Professor's ultra-fast LCG RNG
-static u32_t rng_state = 0;
+static inline void generate_coin_counter(u32_t coin[14], u64_t counter) {
+    // Fixed prefix "DETI coin 2 "
+    coin[0] = 0x44455449u;
+    coin[1] = 0x20636F69u;
+    coin[2] = 0x6E203220u;
 
-static inline void init_lcg_rng(void) {
-    rng_state = (u32_t)time(NULL) ^ 0x62815281u;
+    // Counter data
+    coin[3] = (u32_t)(counter & 0xFFFFFFFFu);
+    coin[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
+    coin[5] = (u32_t)time(NULL);
+
+    // Zeros
+    coin[6] = 0u;
+    coin[7] = 0u;
+    coin[8] = 0u;
+    coin[9] = 0u;
+    coin[10] = 0u;
+    coin[11] = 0u;
+    coin[12] = 0u;
+
+    // Word 13: newline + padding + length
+    coin[13] = 0x00000A80u;
 }
 
-static inline u08_t fast_random_byte(void) {
-    rng_state = 3134521u * rng_state + 1u;
-    return (u08_t)(rng_state >> 23);
-}
-
-static inline u08_t random_printable_ascii(void) {
-    u08_t b = fast_random_byte();
-    b = 32 + (b % 95);
-    return (b == '\n') ? 'X' : b;
-}
-
-// OPTIMIZED: Generate single coin with professor's LCG
-static inline void generate_coin_optimized(u32_t coin[14]) {
-    const u32_t prefix[3] = {
-        0x44455449u,  // 'D','E','T','I'
-        0x20636F69u,  // ' ','c','o','i'
-        0x6E203220u   // 'n',' ','2',' '
-    };
-    u08_t *c = (u08_t*)coin;
-    
-    // Set prefix
-    coin[0] = prefix[0];
-    coin[1] = prefix[1];
-    coin[2] = prefix[2];
-    
-    // Generate 42 random bytes
-    for (int i = 0; i < 42; i++) {
-        c[((12 + i) ^ 3)] = random_printable_ascii();
-    }
-    
-    // Padding
-    c[54 ^ 3] = '\n';
-    c[55 ^ 3] = 0x80;
-    
-    // Zero tail
-    coin[10] = 0;
-    coin[11] = 0;
-    coin[12] = 0;
-    coin[13] &= 0xFF00FFFFu;
-}
-
-static void mine_cpu_coins(void) {
-    u32_t coin[14], hash[5];
-    unsigned long long attempts;
+static inline void mine_cpu_coins(void) {
+    u32_t coin[14] __attribute__((aligned(16)));
+    u32_t hash[5] __attribute__((aligned(16)));
+    u64_t counter = 0;
     time_t start, last_print;
     double elapsed;
-    
-    attempts = 0ULL;
-    init_lcg_rng();
+
     start = time(NULL);
     last_print = start;
-    
+
     while (!stop_signal) {
-        generate_coin_optimized(coin);
-        sha1(coin, hash);
-        attempts++;
-        
-        if (hash[0] == 0xAAD20250u) {
-            coins_found++;
-            printf("\n💰 COIN #%d\n", coins_found);
-            save_coin(coin);
+        generate_coin_counter(coin, counter);
+        sha1_cpu(coin, hash);
+
+        if (__builtin_expect(hash[0] == 0xAAD20250u, 0)) {
+            u08_t *base_coin = (u08_t *)coin;
+            int valid = 1;
+
+            for (int i = 12; i < 54; i++) {
+                if (base_coin[i ^ 3] == '\n') {
+                    valid = 0;
+                    break;
+                }
+            }
+
+            if (valid) {
+                coins_found++;
+                printf("\n💰 COIN #%d\n", coins_found);
+                save_coin(coin);
+            }
         }
-        
-        // Progress every 16M hashes
-        if ((attempts & 0xFFFFFF) == 0) {
+
+        counter++;
+
+        if (__builtin_expect((counter & 0xFFFFFF) == 0, 0)) {
             time_t now = time(NULL);
             if (difftime(now, last_print) >= 5.0) {
                 elapsed = difftime(now, start);
-                printf("[%.0fs] %lluM @ %.2fM/s | Coins:%d\n",
-                       elapsed, attempts/1000000ULL,
-                       (elapsed > 0 ? attempts/elapsed/1e6 : 0),
+                printf("[%.0fs] %luM @ %.2fM/s | Coins:%d\n",
+                       elapsed, counter/1000000UL,
+                       (elapsed > 0 ? counter/elapsed/1e6 : 0),
                        coins_found);
                 last_print = now;
             }
         }
     }
-    
+
     elapsed = difftime(time(NULL), start);
-    printf("\n╔════════════════════════════════════════════════════╗\n");
-    printf("║              FINAL STATISTICS                      ║\n");
-    printf("╠════════════════════════════════════════════════════╣\n");
-    printf("║  Total attempts:  %-29llu  ║\n", attempts);
-    printf("║  Time:            %.2f seconds%-19s║\n", elapsed, "");
-    printf("║  Average rate:    %.2f M/s%-23s║\n", attempts/elapsed/1e6, "");
-    printf("║  Coins found:     %-29d  ║\n", coins_found);
-    printf("╚════════════════════════════════════════════════════╝\n");
+    printf("\n╔════════════════════════════════════════════════════════════╗\n");
+    printf("║                      FINAL STATISTICS                      ║\n");
+    printf("╠════════════════════════════════════════════════════════════╣\n");
+    printf("║ Total attempts:  %-37lu ║\n", counter);
+    printf("║ Time:            %.2f seconds%-26s║\n", elapsed, "");
+    printf("║ Average rate:    %.2f M/s%-30s║\n", counter/elapsed/1e6, "");
+    printf("║ Coins found:     %-37d ║\n", coins_found);
+    printf("╚════════════════════════════════════════════════════════════╝\n");
 }
 
 #endif

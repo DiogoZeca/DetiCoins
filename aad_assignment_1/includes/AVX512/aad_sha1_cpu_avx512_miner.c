@@ -1,6 +1,6 @@
 #include <signal.h>
 #include <stdio.h>
-#include "aad_cpu_avx2_miner.h"
+#include "aad_cpu_avx512_miner.h"
 
 void handle_sigint(int sig) {
     (void)sig;
@@ -10,7 +10,7 @@ void handle_sigint(int sig) {
 
 int main(void) {
     signal(SIGINT, handle_sigint);
-    mine_cpu_avx2_coins();
+    mine_cpu_avx512_coins();
     save_coin(NULL);
     return 0;
 }
