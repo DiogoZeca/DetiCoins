@@ -50,7 +50,7 @@ static inline void mine_cpu_coins(void) {
 
     while (!stop_signal) {
         generate_coin_counter(coin, counter);
-        sha1_cpu(coin, hash);
+        sha1(coin, hash);
 
         if (__builtin_expect(hash[0] == 0xAAD20250u, 0)) {
             u08_t *base_coin = (u08_t *)coin;
