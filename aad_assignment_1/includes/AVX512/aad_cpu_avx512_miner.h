@@ -118,7 +118,7 @@ static inline void mine_cpu_avx512_coins(void) {
 
     while (!stop_signal) {
         update_counters_avx512(coin, counter);
-        sha1_avx512(coin, hash);
+        sha1_avx512f(coin, hash);
         check_and_save_coins_avx512(coin, hash);
 
         counter += 16;
