@@ -22,7 +22,7 @@
 - Linux operating system (Ubuntu 20.04+ recommended)
 - Make build system
 
-### SIMD Requirements
+### CPU SIMD Requirements
 
 | Feature | Check Command |
 |---------|---------------|
@@ -32,13 +32,15 @@
 
 ### GPU Requirements
 
-#### CUDA
-- NVIDIA GPU with CUDA toolkit installed
-
-#### OpenCL
-- **NVIDIA GPU**: CUDA toolkit (provides OpenCL support)
-- **AMD GPU**: Mesa OpenCL drivers (see [setup instructions](#amd-gpu-setup-ubuntudebian))
-- **Intel GPU**: Intel OpenCL runtime
+| Vendor | Requirement |
+|--------|-------------|
+| NVIDIA | CUDA toolkit (includes OpenCL) |
+| AMD    | Mesa OpenCL (Rusticl) |
+| Intel  | Intel OpenCL Runtime || Vendor | Requirement |
+|--------|-------------|
+| NVIDIA | CUDA toolkit (includes OpenCL) |
+| AMD    | Mesa OpenCL (Rusticl) |
+| Intel  | Intel OpenCL Runtime |
 
 ---
 
@@ -263,7 +265,77 @@ export RUSTICL_ENABLE=radeonsi
 
 ---
 
+## Intel GPU Setup
+
+Works for **UHD, Iris Xe, Intel Arc iGPU**.
+
+### Step 1 — Check Intel GPU
+
+```bash
+lscpu | grep "Model name"
+lspci | grep VGA
+```
+
+### Step 2 — Install Intel OpenCL
+
+Modern Intel CPUs (11th gen+, ~2020→):
+
+```bash
+sudo apt update
+sudo apt install intel-opencl-icd clinfo
+```
+
+Older CPUs (6th–10th gen, 2015–2019):
+
+```bash
+sudo apt update
+sudo apt install intel-opencl-icd ocl-icd-libopencl1 clinfo
+```
+
+Very old CPUs (4th–5th gen, 2013–2014):
+
+```bash
+sudo apt update
+sudo apt install beignet-opencl-icd clinfo
+```
+
+### Step 3 — Verify
+
+```bash
+clinfo --list
+```
+
+Expected:
+
+```
+Platform #0: Intel(R) OpenCL Graphics
+  -- Device #0: Intel(R) UHD Graphics [your model]
+```
+
+### Step 4 — Build Miner
+
+```bash
+cd aad_assignment_1/includes
+make opencl
+```
+
+### Step 5 — Run on Intel GPU
+
+```bash
+../bin/opencl_miner 0 0
+```
+
+---
+
+
 ## Troubleshooting OpenCL
+
+### Intel GPU not detected
+
+```bash
+sudo apt install --reinstall intel-opencl-icd
+clinfo | grep Intel
+```
 
 ### AMD GPU Not Detected
 
@@ -348,12 +420,6 @@ Platform #1: rusticl
 | CUDA | `make run-cuda` | 100-500x faster | NVIDIA GPU with CUDA |
 | OpenCL | `../bin/opencl_miner 0 0` | 100-500x faster | Any OpenCL GPU (NVIDIA/AMD/Intel) |
 
-> **Note:** OpenCL performance varies by GPU:
-> - **NVIDIA RTX 3080**: ~7000-8000 M/s
-> - **AMD Radeon 680M** (integrated): ~2000-2500 M/s
-> - Performance depends on compute units and memory bandwidth
-
----
 
 ## Output
 
@@ -472,7 +538,7 @@ aad_assignment_1/
    ../bin/opencl_miner 1 0
    ```
 
-4. **CPU mining**: Use OpenMP versions (`make run-avx2-openmp`) for best multi-core performance
+4. **CPU mining**: Use OpenMP versions (example `make run-avx2-openmp`) for best multi-core performance
 
 ---
 
@@ -481,7 +547,3 @@ aad_assignment_1/
 Academic project for AAD course 2025/2026.
 
 ---
-
-## Author
-
-Developed for **Arquiteturas de Alto Desempenho** (High Performance Architectures) class.
