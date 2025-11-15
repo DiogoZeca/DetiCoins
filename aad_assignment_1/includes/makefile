@@ -92,7 +92,6 @@ help:
 	@echo "  make banana-avx-openmp    - AVX+OpenMP Banana miner"
 	@echo "  make banana-avx2-openmp   - AVX2+OpenMP Banana miner"
 	@echo "  make banana-avx512-openmp - AVX512+OpenMP Banana miner"
-	@echo "  make banana-validator     - Banana coin validator"
 	@echo "  make all-banana           - Build all banana miners"
 	@echo ""
 	@echo "📦 Batch builds:"
@@ -291,13 +290,6 @@ banana-avx512-openmp:
 		$(BANANA_DIR)/SIMD_OpenMP/AVX512/aad_sha1_cpu_avx512_openMP_banana_miner.c
 	@echo "✅ Built: $(BIN_DIR)/banana_avx512_openmp_miner"
 
-banana-validator:
-	@echo "🍌 Building BANANA validator..."
-	@$(CC) $(CFLAGS_BASE) $(INCLUDES) \
-		-o $(BIN_DIR)/banana_validator \
-		$(BANANA_DIR)/banana_coin_validator.c
-	@echo "✅ Built: $(BIN_DIR)/banana_validator"
-
 # =========================================
 # Batch builds
 # =========================================
@@ -428,10 +420,6 @@ run-banana-avx512-openmp: banana-avx512-openmp
 	@echo "🍌 Running BANANA AVX512 OpenMP miner..."
 	@$(BIN_DIR)/banana_avx512_openmp_miner
 
-test-banana: banana-validator
-	@echo "🍌 Testing BANANA coin format..."
-	@$(BIN_DIR)/banana_validator
-
 # =========================================
 # Clean
 # =========================================
@@ -462,5 +450,4 @@ clean:
         run-banana-cuda run-banana-opencl \
         run-banana-cpu-openmp run-banana-avx-openmp \
         run-banana-avx2-openmp run-banana-avx512-openmp \
-        test-banana \
         clean

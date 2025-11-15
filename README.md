@@ -11,6 +11,7 @@
 - **CUDA Miner**: GPU-accelerated mining using NVIDIA CUDA (speed varies by GPU)
 - **OpenCL Miner**: Cross-platform GPU mining supporting NVIDIA, AMD, and Intel GPUs
 - **OpenMP Support**: Multi-threading support for CPU and AVX miners to utilize multiple CPU cores
+- **Banana Coin Mining**: Added functionality to mine BANANA coins with all previous optimizations (CPU, SIMD, OpenMP, GPU)
 
 ---
 
@@ -89,6 +90,21 @@ make cuda             # Build CUDA miner (requires NVIDIA GPU with CUDA support)
 make opencl           # Build OpenCL miner (cross-platform GPU)
 ```
 
+#### Banana Coin Miners
+
+```bash
+make banana-cpu              # Build BANANA CPU scalar miner
+make banana-avx              # Build BANANA AVX miner
+make banana-avx2             # Build BANANA AVX2 miner
+make banana-avx512           # Build BANANA AVX-512 miner
+make banana-cpu-openmp       # Build BANANA CPU scalar miner with OpenMP support
+make banana-avx-openmp       # Build BANANA AVX miner with OpenMP support
+make banana-avx2-openmp      # Build BANANA AVX2 miner with OpenMP support
+make banana-avx512-openmp    # Build BANANA AVX-512 miner with OpenMP support
+make banana-cuda             # Build BANANA CUDA miner
+make banana-opencl           # Build BANANA OpenCL miner
+```
+
 ---
 
 ### Running Miners
@@ -156,6 +172,22 @@ The OpenCL miner requires platform and device selection:
    Platform 1: rusticl
      Device 0: AMD Radeon 680M (23.19 GB, 12 CUs)
    ```
+
+#### Banana Coin Miners
+**Build and run directly:**
+
+```bash
+make run-banana-cpu                # Build and run BANANA CPU scalar miner
+make run-banana-avx                # Build and run BANANA AVX miner
+make run-banana-avx2               # Build and run BANANA AVX2 miner
+make run-banana-avx512             # Build and run BANANA AVX-512 miner
+make run-banana-cpu-openmp         # Build and run BANANA CPU scalar miner with OpenMP support
+make run-banana-avx-openmp         # Build and run BANANA AVX miner with OpenMP support
+make run-banana-avx2-openmp        # Build and run BANANA AVX2 miner with OpenMP support
+make run-banana-avx512-openmp      # Build and run BANANA AVX-512 miner with OpenMP support
+make run-banana-cuda               # Build and run BANANA CUDA miner
+make run-banana-opencl             # Build and run BANANA OpenCL miner (shows device list)
+```   
 
 ---
 
@@ -463,6 +495,17 @@ aad_assignment_1/
 │   │   ├── aad_sha1_opencl.c
 │   │   └── aad_sha1_opencl.h
 │   ├── SIMD_OpenMP/        # OpenMP implementations
+│   │   ├── AVX/            # AVX + OpenMP
+│   │   ├── AVX2/           # AVX2 + OpenMP
+│   │   └── AVX512/         # AVX-512 + Open
+│   ├── Banana_Miner/
+│   │   ├── SIMD_OpenMP/    # Banana miners with SIMD_OpenMP
+│   │   ├── AVX/            # Banana AVX miner
+│   │   ├── AVX2/           # Banana AVX2 miner
+│   │   ├── AVX512/         # Banana AVX-512 miner
+│   │   ├── CPU/            # Banana CPU miner
+│   │   ├── CUDA/           # Banana CUDA miner
+│   │   └── OpenCL/         # Banana OpenCL miner
 │   ├── aad_sha1_cpu.h      # CPU SHA1 implementation
 │   ├── aad_vault.h         # Coin storage and validation
 │   ├── aad_utilities.h     # Timing and utilities
