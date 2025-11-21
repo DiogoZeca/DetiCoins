@@ -21,52 +21,42 @@ static inline void mine_cuda_coins(void) {
     u32_t *host_coins_buffer;
     u32_t base_value1, base_value2, iteration_counter;
     u64_t total_attempts = 0;
-    
-    // Initialize CUDA
+
     cd.device_number = 0;
     cd.cubin_file_name = "./CUDA/mine_deti_coins_cuda_kernel.cubin";
     cd.kernel_name = "mine_deti_coins_cuda_kernel";
     cd.data_size[0] = COINS_BUFFER_SIZE * sizeof(u32_t);
     cd.data_size[1] = 0u;
-    
+
     printf("🚀 Starting CUDA mining\n");
     printf("============================================================\n");
-    
+
     initialize_cuda(&cd);
     printf("GPU: %s\n", cd.device_name);
-    
+
     host_coins_buffer = (u32_t *)cd.host_data[0];
     base_value1 = (u32_t)time(NULL);
     base_value2 = (u32_t)getpid();
     iteration_counter = 0u;
-    
+
     time_t start = time(NULL);
     time_t last_print = start;
-    
-    // Mining loop
+
     while (!stop_signal) {
-        // Initialize buffer
         host_coins_buffer[0] = 1u;
-        
-        // Copy to device
         host_to_device_copy(&cd, 0);
-        
-        // Configure and launch kernel
+
         cd.grid_dim_x = THREADS_PER_KERNEL_LAUNCH / RECOMENDED_CUDA_BLOCK_SIZE;
         cd.block_dim_x = RECOMENDED_CUDA_BLOCK_SIZE;
         cd.n_kernel_arguments = 4;
-        
         cd.arg[0] = &cd.device_data[0];
         cd.arg[1] = &base_value1;
         cd.arg[2] = &base_value2;
         cd.arg[3] = &iteration_counter;
-        
+
         lauch_kernel(&cd);
-        
-        // Copy results back
         device_to_host_copy(&cd, 0);
-        
-        // Check for found coins
+
         u32_t next_free_idx = host_coins_buffer[0];
         if (next_free_idx > 1u && next_free_idx <= COINS_BUFFER_SIZE) {
             u32_t coins = (next_free_idx - 1u) / 14u;
@@ -74,22 +64,20 @@ static inline void mine_cuda_coins(void) {
                 u32_t coin_offset = 1u + i * 14u;
                 if (coin_offset + 14u <= next_free_idx) {
                     u32_t *coin_data = &host_coins_buffer[coin_offset];
-                    
-                    // VALIDATE: Check for newlines in bytes 12-53 (like CPU miners)
                     u08_t *base_coin = (u08_t *)coin_data;
                     int valid = 1;
+
                     for (int j = 12; j < 54; j++) {
                         if (base_coin[j ^ 3] == '\n') {
                             valid = 0;
                             break;
                         }
                     }
-                    
+
                     if (valid) {
-                        // Verify hash on host
                         u32_t hash[5];
                         sha1(coin_data, hash);
-                        
+
                         if (hash[0] == 0xAAD20250u) {
                             coins_found++;
                             printf("\n💰 COIN #%d (GPU)\n", coins_found);
@@ -99,16 +87,12 @@ static inline void mine_cuda_coins(void) {
                 }
             }
         }
-        
-        // Update counters
+
         total_attempts += THREADS_PER_KERNEL_LAUNCH;
         iteration_counter += THREADS_PER_KERNEL_LAUNCH;
-        
-        // Vary base values
         base_value1 = base_value1 * 1103515245u + 12345u;
         base_value2 ^= iteration_counter;
-        
-        // Progress reporting (every 5 seconds)
+
         time_t now = time(NULL);
         double elapsed = difftime(now, start);
         if (elapsed >= 5.0 && difftime(now, last_print) >= 5.0) {
@@ -121,12 +105,11 @@ static inline void mine_cuda_coins(void) {
             last_print = now;
         }
     }
-    
-    // Final statistics
+
     time_t end = time(NULL);
     double elapsed = difftime(end, start);
     double final_rate = total_attempts / elapsed / 1e6;
-    
+
     printf("\n╔════════════════════════════════════════════════════════════╗\n");
     printf("║ CUDA GPU FINAL STATISTICS                                  ║\n");
     printf("╠════════════════════════════════════════════════════════════╣\n");
@@ -136,8 +119,7 @@ static inline void mine_cuda_coins(void) {
     printf("║ Average rate: %.2f M/s%-30s║\n", final_rate, "");
     printf("║ Coins found: %-37d ║\n", coins_found);
     printf("╚════════════════════════════════════════════════════════════╝\n");
-    
-    // Cleanup
+
     terminate_cuda(&cd);
 }
 

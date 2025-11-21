@@ -11,6 +11,9 @@
 - **CUDA Miner**: GPU-accelerated mining using NVIDIA CUDA (speed varies by GPU)
 - **OpenCL Miner**: Cross-platform GPU mining supporting NVIDIA, AMD, and Intel GPUs
 - **OpenMP Support**: Multi-threading support for CPU and AVX miners to utilize multiple CPU cores
+- **MPI Distributed Miner**: Client/Server architecture for distributed mining across multiple processes
+- **WebAssembly Miner**: Browser-based mining using WebAssembly
+- **WebAssembly SIMD Miner**: Browser-based mining with 4-way SIMD parallelization
 - **Banana Coin Mining**: Added functionality to mine BANANA coins with all previous optimizations (CPU, SIMD, OpenMP, GPU)
 
 ---
@@ -37,11 +40,24 @@
 |--------|-------------|
 | NVIDIA | CUDA toolkit (includes OpenCL) |
 | AMD    | Mesa OpenCL (Rusticl) |
-| Intel  | Intel OpenCL Runtime || Vendor | Requirement |
-|--------|-------------|
-| NVIDIA | CUDA toolkit (includes OpenCL) |
-| AMD    | Mesa OpenCL (Rusticl) |
 | Intel  | Intel OpenCL Runtime |
+
+### MPI Requirements (Distributed Mining)
+
+```bash
+sudo apt install openmpi-bin libopenmpi-dev
+```
+
+### WebAssembly Requirements (Browser Mining)
+
+Install Emscripten SDK:
+```bash
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+```
 
 ---
 
@@ -90,6 +106,19 @@ make cuda             # Build CUDA miner (requires NVIDIA GPU with CUDA support)
 make opencl           # Build OpenCL miner (cross-platform GPU)
 ```
 
+#### MPI Distributed Miner
+
+```bash
+make mpi              # Build MPI Client/Server miner (requires MPI)
+```
+
+#### WebAssembly Miners
+
+```bash
+make webAssembly      # Build WebAssembly miner (requires Emscripten)
+make webAssembly-simd # Build WebAssembly SIMD miner (4-way parallel)
+```
+
 #### Banana Coin Miners
 
 ```bash
@@ -125,6 +154,32 @@ make run-avx512-openmp      # Build and run AVX-512 miner with OpenMP support
 make run-cuda               # Build and run CUDA miner
 make run-opencl             # Build and run OpenCL miner (shows device list)
 ```
+
+#### MPI Distributed Miner
+
+```bash
+make run-mpi                # Run with 5 workers (default)
+make run-mpi NP=8           # Run with 8 workers
+make run-mpi NP=4 TIME=60   # Run with 4 workers for 60 seconds
+```
+
+- `NP`: Number of MPI processes (workers + 1 master, default: 5)
+- `TIME`: Duration in seconds (0 = unlimited, requires Ctrl+C to stop)
+
+#### WebAssembly Miners
+
+```bash
+make run-webAssembly        # Build and serve WebAssembly miner
+make run-webAssembly-simd   # Build and serve WebAssembly SIMD miner
+```
+
+Open `http://localhost:8000` in your browser to start mining.
+
+**Note:** The WebAssembly miners allow you to configure the batch size (number of hashes per iteration) in the browser interface. Common values:
+- 100,000: Lower CPU usage, more responsive browser
+- 500,000: Balanced performance
+- 1,000,000: Higher throughput, may affect browser responsiveness
+
 
 **Or run the compiled binary directly:**
 
@@ -451,6 +506,9 @@ Platform #1: rusticl
 | AVX2 OpenMP | `make run-avx2-openmp` | 20-40x faster | AVX2 + multi-core |
 | CUDA | `make run-cuda` | 100-500x faster | NVIDIA GPU with CUDA |
 | OpenCL | `../bin/opencl_miner 0 0` | 100-500x faster | Any OpenCL GPU (NVIDIA/AMD/Intel) |
+| MPI | `make run-mpi NP=8` | Scales with workers | OpenMPI + AVX2 |
+| WebAssembly | `make run-webAssembly` | ~1x (browser) | Emscripten + browser |
+| WebAssembly SIMD | `make run-webAssembly-simd` | ~4x (browser) | Emscripten + SIMD-enabled browser |
 
 
 ## Output
@@ -506,6 +564,13 @@ aad_assignment_1/
 │   │   ├── CPU/            # Banana CPU miner
 │   │   ├── CUDA/           # Banana CUDA miner
 │   │   └── OpenCL/         # Banana OpenCL miner
+│   ├── MPI_ClientServer/   # MPI distributed miner
+│   │   ├── aad_mpi_common.h   # Common MPI definitions
+│   │   ├── aad_mpi_master.h   # Master (server) logic
+│   │   ├── aad_mpi_worker.h   # Worker (client) logic
+│   │   └── aad_sha1_mpi_miner.c  # MPI miner entry point
+│   ├── WebAssembly/        # WebAssembly browser miner
+│   ├── WebAssembly_SIMD/   # WebAssembly SIMD miner (4-way parallel)
 │   ├── aad_sha1_cpu.h      # CPU SHA1 implementation
 │   ├── aad_vault.h         # Coin storage and validation
 │   ├── aad_utilities.h     # Timing and utilities

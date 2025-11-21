@@ -15,17 +15,12 @@ static volatile int stop_signal = 0;
 static volatile int coins_found = 0;
 
 static inline void generate_coin_counter(u32_t coin[14], u64_t counter) {
-    // Fixed prefix "DETI coin 2 "
     coin[0] = 0x44455449u;
     coin[1] = 0x20636F69u;
     coin[2] = 0x6E203220u;
-
-    // Counter data
     coin[3] = (u32_t)(counter & 0xFFFFFFFFu);
     coin[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
     coin[5] = (u32_t)time(NULL);
-
-    // Zeros
     coin[6] = 0u;
     coin[7] = 0u;
     coin[8] = 0u;
@@ -33,8 +28,6 @@ static inline void generate_coin_counter(u32_t coin[14], u64_t counter) {
     coin[10] = 0u;
     coin[11] = 0u;
     coin[12] = 0u;
-
-    // Word 13: newline + padding + length
     coin[13] = 0x00000A80u;
 }
 

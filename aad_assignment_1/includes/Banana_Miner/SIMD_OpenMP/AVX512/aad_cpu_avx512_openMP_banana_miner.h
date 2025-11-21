@@ -170,7 +170,7 @@ static inline void mine_cpu_avx512_banana_coins_openmp(void) {
       // BANANA: Update banana counters
       update_banana_counters_avx512(coin, counter);
       
-      sha1_avx512(coin, hash);
+      sha1_avx512f(coin, hash);
       
       // BANANA: Check and save banana coins
       check_and_save_banana_coins_avx512(coin, hash);

@@ -22,18 +22,13 @@ void mine_deti_coins_cuda_kernel(
     
     n = (u32_t)threadIdx.x + (u32_t)blockDim.x * (u32_t)blockIdx.x;
     u64_t counter = (u64_t)iteration_offset + (u64_t)n;
-    
-    // Initialize coin data EXACTLY like CPU miners
-    data[0] = 0x44455449u;  // "DETI"
-    data[1] = 0x20636F69u;  // " coi"
-    data[2] = 0x6E203220u;  // "n 2 "
-    
-    // Words 3-5: Counter values (VARIABLE)
+
+    data[0] = 0x44455449u;
+    data[1] = 0x20636F69u;
+    data[2] = 0x6E203220u;
     data[3] = (u32_t)(counter & 0xFFFFFFFFu);
     data[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
     data[5] = base_value1;
-    
-    // Words 6-12: ZEROS
     data[6] = 0x00000000u;
     data[7] = 0x00000000u;
     data[8] = 0x00000000u;
@@ -41,11 +36,8 @@ void mine_deti_coins_cuda_kernel(
     data[10] = 0x00000000u;
     data[11] = 0x00000000u;
     data[12] = 0x00000000u;
-    
-    // Word 13: CRITICAL - Must be 0x00000A80u (newline + padding)
     data[13] = 0x00000A80u;
-    
-    // Compute SHA1 hash
+
     {
         #define T u32_t
         #define C(c) (c)
