@@ -10,28 +10,46 @@
 #include "../aad_data_types.h"
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
+#include "../aad_coin_types.h"
 
 static volatile int stop_signal = 0;
 static volatile int coins_found = 0;
 
-static inline void generate_coin_counter(u32_t coin[14], u64_t counter) {
-    coin[0] = 0x44455449u;
-    coin[1] = 0x20636F69u;
-    coin[2] = 0x6E203220u;
+//
+// Generate coin with optional custom text
+// Option B: custom text placed after counter
+//
+static inline void generate_coin_counter(u32_t coin[14], u64_t counter, const coin_config_t *config) {
+    // Common prefix (words 0-2): "DETI coin 2 "
+    coin[0] = 0x44455449u;  // "DETI"
+    coin[1] = 0x20636F69u;  // " coi"
+    coin[2] = 0x6E203220u;  // "n 2 "
+
+    // Counter (words 3-4): always same position
     coin[3] = (u32_t)(counter & 0xFFFFFFFFu);
     coin[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
-    coin[5] = (u32_t)time(NULL);
-    coin[6] = 0u;
-    coin[7] = 0u;
-    coin[8] = 0u;
-    coin[9] = 0u;
-    coin[10] = 0u;
-    coin[11] = 0u;
-    coin[12] = 0u;
+
+    int next_word = 5;  // Next available word index
+
+    // Custom text (if CUSTOM type)
+    if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
+        next_word = encode_custom_text(coin, config->custom_text, 5);
+    }
+
+    // Timestamp (after custom text, or word 5 if no custom text)
+    coin[next_word] = (u32_t)time(NULL);
+    next_word++;
+
+    // Zero remaining words
+    for (int i = next_word; i < 13; i++) {
+        coin[i] = 0u;
+    }
+
+    // SHA-1 padding (word 13): always last
     coin[13] = 0x00000A80u;
 }
 
-static inline void mine_cpu_coins(void) {
+static inline void mine_cpu_coins(const coin_config_t *config) {
     u32_t coin[14] __attribute__((aligned(16)));
     u32_t hash[5] __attribute__((aligned(16)));
     u64_t counter = 0;
@@ -41,8 +59,16 @@ static inline void mine_cpu_coins(void) {
     start = time(NULL);
     last_print = start;
 
+    // Print startup message
+    if (config->type == COIN_TYPE_CUSTOM) {
+        printf("[+] Starting CUSTOM coin mining (CPU Scalar)...\n");
+        printf("   Custom text: \"%s\"\n\n", config->custom_text);
+    } else {
+        printf("[*] Starting DETI coin mining (CPU Scalar)...\n\n");
+    }
+
     while (!stop_signal) {
-        generate_coin_counter(coin, counter);
+        generate_coin_counter(coin, counter, config);
         sha1(coin, hash);
 
         if (__builtin_expect(hash[0] == 0xAAD20250u, 0)) {
@@ -58,7 +84,7 @@ static inline void mine_cpu_coins(void) {
 
             if (valid) {
                 coins_found++;
-                printf("\n💰 COIN #%d\n", coins_found);
+                printf("\n%s COIN #%d\n", config->emoji, coins_found);
                 save_coin(coin);
             }
         }

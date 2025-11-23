@@ -12,41 +12,77 @@
 #include "../aad_sha1_cpu.h"
 #include "../aad_vault.h"
 #include "../aad_utilities.h"
+#include "../aad_coin_types.h"
 
 static volatile int stop_signal = 0;
 static volatile int coins_found = 0;
 
-static inline void init_coin_data_avx(v4si coin[14]) {
+//
+// Initialize coin data with optional custom text (broadcast to all 4 lanes)
+//
+static inline void init_coin_data_avx(v4si coin[14], const coin_config_t *config) {
+    // Common prefix (words 0-2): broadcast to all lanes
     coin[0] = (v4si){0x44455449u, 0x44455449u, 0x44455449u, 0x44455449u};
     coin[1] = (v4si){0x20636F69u, 0x20636F69u, 0x20636F69u, 0x20636F69u};
     coin[2] = (v4si){0x6E203220u, 0x6E203220u, 0x6E203220u, 0x6E203220u};
-    coin[6] = (v4si){0u, 0u, 0u, 0u};
-    coin[7] = (v4si){0u, 0u, 0u, 0u};
-    coin[8] = (v4si){0u, 0u, 0u, 0u};
-    coin[9] = (v4si){0u, 0u, 0u, 0u};
-    coin[10] = (v4si){0u, 0u, 0u, 0u};
-    coin[11] = (v4si){0u, 0u, 0u, 0u};
-    coin[12] = (v4si){0u, 0u, 0u, 0u};
+
+    // Zero all remaining words (will be set in update_counters)
+    for (int i = 3; i < 13; i++) {
+        coin[i] = (v4si){0u, 0u, 0u, 0u};
+    }
+
+    // If CUSTOM type, encode custom text into scalar coin then broadcast
+    if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
+        u32_t temp_coin[14] = {0};  // Initialize to zeros
+        encode_custom_text(temp_coin, config->custom_text, 5);
+
+        // Broadcast custom text words to all lanes (starting at word 5)
+        int word_idx = 5;
+        while (word_idx < 13 && temp_coin[word_idx] != 0) {
+            coin[word_idx] = (v4si){temp_coin[word_idx], temp_coin[word_idx],
+                                     temp_coin[word_idx], temp_coin[word_idx]};
+            word_idx++;
+        }
+    }
 }
 
-static inline void update_counters_avx(v4si coin[14], u64_t counter) {
+//
+// Update counters for all 4 lanes
+//
+static inline void update_counters_avx(v4si coin[14], u64_t counter, const coin_config_t *config) {
+    // Counter low (words 3): different for each lane
     u32_t base_counters[4];
     for (int i = 0; i < 4; i++) {
         base_counters[i] = (u32_t)((counter + i) & 0xFFFFFFFFu);
     }
-
     coin[3] = (v4si){base_counters[0], base_counters[1], base_counters[2], base_counters[3]};
 
+    // Counter high (word 4): same for all lanes
     u32_t counter_high = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
     coin[4] = (v4si){counter_high, counter_high, counter_high, counter_high};
 
-    u32_t time_seed = (u32_t)time(NULL);
-    coin[5] = (v4si){time_seed, time_seed, time_seed, time_seed};
+    // Calculate timestamp position based on custom text
+    int timestamp_word = 5;
+    if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
+        // Calculate how many words the custom text uses
+        size_t text_len = strlen(config->custom_text);
+        timestamp_word = 5 + ((text_len + 3) / 4);  // Round up to word boundary
+    }
 
+    // Timestamp: broadcast to all lanes
+    u32_t time_seed = (u32_t)time(NULL);
+    coin[timestamp_word] = (v4si){time_seed, time_seed, time_seed, time_seed};
+
+    // Zero remaining words after timestamp
+    for (int i = timestamp_word + 1; i < 13; i++) {
+        coin[i] = (v4si){0u, 0u, 0u, 0u};
+    }
+
+    // SHA-1 padding (word 13): always last
     coin[13] = (v4si){0x00000A80u, 0x00000A80u, 0x00000A80u, 0x00000A80u};
 }
 
-static inline void check_and_save_coins_avx(v4si coin[14], v4si hash[5]) {
+static inline void check_and_save_coins_avx(v4si coin[14], v4si hash[5], const coin_config_t *config) {
     __m128i target = _mm_set1_epi32(0xAAD20250u);
     __m128i hash0_vec = (__m128i)hash[0];
     __m128i cmp = _mm_cmpeq_epi32(hash0_vec, target);
@@ -77,29 +113,37 @@ static inline void check_and_save_coins_avx(v4si coin[14], v4si hash[5]) {
 
             if (valid) {
                 coins_found++;
-                printf("\n💰 COIN #%d (Lane %d)\n", coins_found, lane);
+                printf("\n%s COIN #%d (Lane %d)\n", config->emoji, coins_found, lane);
                 save_coin(coin_scalar);
             }
         }
     }
 }
 
-static inline void mine_cpu_avx_coins(void) {
+static inline void mine_cpu_avx_coins(const coin_config_t *config) {
     v4si coin[14] __attribute__((aligned(32)));
     v4si hash[5] __attribute__((aligned(32)));
     u64_t counter = 0;
     time_t start, last_print;
     double elapsed;
 
-    init_coin_data_avx(coin);
+    init_coin_data_avx(coin, config);
 
     start = time(NULL);
     last_print = start;
 
+    // Print startup message
+    if (config->type == COIN_TYPE_CUSTOM) {
+        printf("[+] Starting CUSTOM coin mining (AVX)...\n");
+        printf("   Custom text: \"%s\"\n\n", config->custom_text);
+    } else {
+        printf("[*] Starting DETI coin mining (AVX)...\n\n");
+    }
+
     while (!stop_signal) {
-        update_counters_avx(coin, counter);
+        update_counters_avx(coin, counter, config);
         sha1_avx(coin, hash);
-        check_and_save_coins_avx(coin, hash);
+        check_and_save_coins_avx(coin, hash, config);
 
         counter += 4;
 

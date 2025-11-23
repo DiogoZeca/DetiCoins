@@ -16,7 +16,7 @@
 // data type used to store all CUDA related stuff
 //
 
-#define MAX_N_ARGUMENTS  4
+#define MAX_N_ARGUMENTS  16  // Increased to support custom text parameters
 
 typedef struct
 {

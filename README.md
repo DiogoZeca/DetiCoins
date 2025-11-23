@@ -5,16 +5,16 @@
 ## Features
 
 - **CPU Scalar Miner**: Single-threaded SHA1 implementation
-- **AVX Miner**: Parallel mining using AVX instructions (4 hashes simultaneously, ~4x faster)
-- **AVX2 Miner**: Parallel mining using AVX2 instructions (8 hashes simultaneously, ~8x faster)
-- **AVX-512 Miner**: Parallel mining using AVX-512 instructions (16 hashes simultaneously, ~16x faster)
+- **AVX Miner**: Parallel mining using AVX instructions (4 hashes simultaneously)
+- **AVX2 Miner**: Parallel mining using AVX2 instructions (8 hashes simultaneously)
+- **AVX-512 Miner**: Parallel mining using AVX-512 instructions (16 hashes simultaneously)
 - **CUDA Miner**: GPU-accelerated mining using NVIDIA CUDA (speed varies by GPU)
 - **OpenCL Miner**: Cross-platform GPU mining supporting NVIDIA, AMD, and Intel GPUs
 - **OpenMP Support**: Multi-threading support for CPU and AVX miners to utilize multiple CPU cores
 - **MPI Distributed Miner**: Client/Server architecture for distributed mining across multiple processes
 - **WebAssembly Miner**: Browser-based mining using WebAssembly
 - **WebAssembly SIMD Miner**: Browser-based mining with 4-way SIMD parallelization
-- **Banana Coin Mining**: Added functionality to mine BANANA coins with all previous optimizations (CPU, SIMD, OpenMP, GPU)
+- **Custom Coin Mining**: Mine personalized coins with embedded text (1-27 characters) using all miners (CPU, SIMD, OpenMP, CUDA)
 
 ---
 
@@ -119,26 +119,11 @@ make webAssembly      # Build WebAssembly miner (requires Emscripten)
 make webAssembly-simd # Build WebAssembly SIMD miner (4-way parallel)
 ```
 
-#### Banana Coin Miners
-
-```bash
-make banana-cpu              # Build BANANA CPU scalar miner
-make banana-avx              # Build BANANA AVX miner
-make banana-avx2             # Build BANANA AVX2 miner
-make banana-avx512           # Build BANANA AVX-512 miner
-make banana-cpu-openmp       # Build BANANA CPU scalar miner with OpenMP support
-make banana-avx-openmp       # Build BANANA AVX miner with OpenMP support
-make banana-avx2-openmp      # Build BANANA AVX2 miner with OpenMP support
-make banana-avx512-openmp    # Build BANANA AVX-512 miner with OpenMP support
-make banana-cuda             # Build BANANA CUDA miner
-make banana-opencl           # Build BANANA OpenCL miner
-```
-
 ---
 
 ### Running Miners
 
-#### CPU and SIMD Miners
+#### Standard DETI Coin Mining
 
 **Build and run directly:**
 
@@ -153,6 +138,44 @@ make run-avx2-openmp        # Build and run AVX2 miner with OpenMP support
 make run-avx512-openmp      # Build and run AVX-512 miner with OpenMP support
 make run-cuda               # Build and run CUDA miner
 make run-opencl             # Build and run OpenCL miner (shows device list)
+```
+
+#### Custom Coin Mining
+
+Mine coins with personalized text embedded (1-27 characters):
+
+```bash
+# CPU Miners
+make run-cpu CUSTOM="TEXT"                    # CPU scalar with custom text
+make run-avx CUSTOM="TEXT"                  # AVX with custom text
+make run-avx2 CUSTOM="TEXT"                # AVX2 with custom text
+make run-avx512 CUSTOM="TEXT"             # AVX-512 with custom text
+
+# OpenMP Multi-threaded Miners
+make run-cpu-openmp CUSTOM="TEXT"            # CPU OpenMP with custom text
+make run-avx-openmp CUSTOM="TEXT"       # AVX OpenMP with custom text
+make run-avx2-openmp CUSTOM="TEXT"      # AVX2 OpenMP with custom text
+make run-avx512-openmp CUSTOM="TEXT"    # AVX-512 OpenMP with custom text
+
+# GPU Miners
+make run-cuda CUSTOM="TEXT"               # CUDA with custom text
+```
+
+**Requirements:**
+- Text must be 1-27 characters long
+- No newline characters allowed
+- Multi-word text should be quoted: `CUSTOM="HELLO WORLD"`
+
+**Example:**
+```bash
+# Mine DETI coins with "AAD2025" embedded
+make run-avx2-openmp CUSTOM="AAD2025"
+```
+
+Output will show:
+```
+[+] CUSTOM COIN #1 (Thread 2, Lane 5)
+[+] CUSTOM COIN #2 (Thread 0, Lane 3)
 ```
 
 #### MPI Distributed Miner
@@ -227,22 +250,6 @@ The OpenCL miner requires platform and device selection:
    Platform 1: rusticl
      Device 0: AMD Radeon 680M (23.19 GB, 12 CUs)
    ```
-
-#### Banana Coin Miners
-**Build and run directly:**
-
-```bash
-make run-banana-cpu                # Build and run BANANA CPU scalar miner
-make run-banana-avx                # Build and run BANANA AVX miner
-make run-banana-avx2               # Build and run BANANA AVX2 miner
-make run-banana-avx512             # Build and run BANANA AVX-512 miner
-make run-banana-cpu-openmp         # Build and run BANANA CPU scalar miner with OpenMP support
-make run-banana-avx-openmp         # Build and run BANANA AVX miner with OpenMP support
-make run-banana-avx2-openmp        # Build and run BANANA AVX2 miner with OpenMP support
-make run-banana-avx512-openmp      # Build and run BANANA AVX-512 miner with OpenMP support
-make run-banana-cuda               # Build and run BANANA CUDA miner
-make run-banana-opencl             # Build and run BANANA OpenCL miner (shows device list)
-```   
 
 ---
 
@@ -492,24 +499,6 @@ Platform #1: rusticl
 ../bin/opencl_miner 1 0  # Use AMD
 ```
 
----
-
-## Miner Comparison
-
-| Miner Type | Command | Expected Speed | Requirements |
-|------------|---------|----------------|--------------|
-| CPU Scalar | `make run-cpu` | Baseline (1x) | Any x86-64 CPU |
-| AVX | `make run-avx` | ~4x faster | AVX support |
-| AVX2 | `make run-avx2` | ~8x faster | AVX2 support |
-| AVX-512 | `make run-avx512` | ~16x faster | AVX-512 support |
-| CPU OpenMP | `make run-cpu-openmp` | 4-8x faster | Multi-core CPU |
-| AVX2 OpenMP | `make run-avx2-openmp` | 20-40x faster | AVX2 + multi-core |
-| CUDA | `make run-cuda` | 100-500x faster | NVIDIA GPU with CUDA |
-| OpenCL | `../bin/opencl_miner 0 0` | 100-500x faster | Any OpenCL GPU (NVIDIA/AMD/Intel) |
-| MPI | `make run-mpi NP=8` | Scales with workers | OpenMPI + AVX2 |
-| WebAssembly | `make run-webAssembly` | ~1x (browser) | Emscripten + browser |
-| WebAssembly SIMD | `make run-webAssembly-simd` | ~4x (browser) | Emscripten + SIMD-enabled browser |
-
 
 ## Output
 
@@ -522,8 +511,8 @@ Mined coins are saved to: `aad_assignment_1/deti_coins_v2_vault.txt`
 
 **Example output during mining:**
 ```
-💰 COIN #1 (OpenCL)
-💰 COIN #2 (OpenCL)
+[*] COIN #1 (OpenCL)
+[*] COIN #2 (OpenCL)
 [5s] 10569 M @ 2113.93 M/s | Coins: 3 | GPU: 1
 ```
 
@@ -545,36 +534,31 @@ aad_assignment_1/
 │   ├── AVX2/               # AVX2 SIMD implementation
 │   ├── AVX512/             # AVX-512 SIMD implementation
 │   ├── CUDA/               # CUDA GPU implementation
-│   │   ├── mine_deti_coins_cuda_kernel.cu
-│   │   ├── aad_sha1_cuda_miner.c
-│   │   └── aad_cuda_miner.h
+│   │   ├── mine_deti_coins_cuda_kernel.cu  # CUDA kernel
+│   │   ├── aad_sha1_cuda_miner.c           # CUDA host code
+│   │   └── aad_cuda_miner.h                # CUDA miner header
 │   ├── OpenCL/             # OpenCL GPU implementation
-│   │   ├── aad_sha1_opencl_kernel.cl
-│   │   ├── aad_sha1_opencl.c
-│   │   └── aad_sha1_opencl.h
+│   │   ├── aad_sha1_opencl_kernel.cl       # OpenCL kernel
+│   │   ├── aad_sha1_opencl.c               # OpenCL host code
+│   │   └── aad_sha1_opencl.h               # OpenCL miner header
 │   ├── SIMD_OpenMP/        # OpenMP implementations
+│   │   ├── CPU/            # CPU + OpenMP
 │   │   ├── AVX/            # AVX + OpenMP
 │   │   ├── AVX2/           # AVX2 + OpenMP
-│   │   └── AVX512/         # AVX-512 + Open
-│   ├── Banana_Miner/
-│   │   ├── SIMD_OpenMP/    # Banana miners with SIMD_OpenMP
-│   │   ├── AVX/            # Banana AVX miner
-│   │   ├── AVX2/           # Banana AVX2 miner
-│   │   ├── AVX512/         # Banana AVX-512 miner
-│   │   ├── CPU/            # Banana CPU miner
-│   │   ├── CUDA/           # Banana CUDA miner
-│   │   └── OpenCL/         # Banana OpenCL miner
+│   │   └── AVX512/         # AVX-512 + OpenMP
 │   ├── MPI_ClientServer/   # MPI distributed miner
-│   │   ├── aad_mpi_common.h   # Common MPI definitions
-│   │   ├── aad_mpi_master.h   # Master (server) logic
-│   │   ├── aad_mpi_worker.h   # Worker (client) logic
-│   │   └── aad_sha1_mpi_miner.c  # MPI miner entry point
+│   │   ├── aad_mpi_common.h            # Common MPI definitions
+│   │   ├── aad_mpi_master.h            # Master (server) logic
+│   │   ├── aad_mpi_worker.h            # Worker (client) logic
+│   │   └── aad_sha1_mpi_miner.c        # MPI miner entry point
 │   ├── WebAssembly/        # WebAssembly browser miner
 │   ├── WebAssembly_SIMD/   # WebAssembly SIMD miner (4-way parallel)
 │   ├── aad_sha1_cpu.h      # CPU SHA1 implementation
+│   ├── aad_coin_types.h    # Coin type system (DETI/CUSTOM)
 │   ├── aad_vault.h         # Coin storage and validation
 │   ├── aad_utilities.h     # Timing and utilities
 │   ├── aad_data_types.h    # Type definitions
+│   ├── aad_cuda_utilities.h # CUDA utilities
 │   └── makefile            # Build system
 ├── deti_coins_v2_vault.txt # Output file (mined coins)
 └── README.md               # This file
@@ -599,7 +583,6 @@ aad_assignment_1/
 | Issue | Solution |
 |-------|----------|
 | CUDA miner fails to compile | Ensure you have the NVIDIA CUDA toolkit installed and a compatible GPU. |
-| CUDA architecture mismatch | Edit `makefile` and change `CUDA_ARCH := sm_86` to match your GPU architecture. |
 | CUDA runtime errors | Verify GPU is available with `nvidia-smi`. |
 
 ---
@@ -627,31 +610,4 @@ aad_assignment_1/
 
 ---
 
-## Performance Tips
 
-1. **Use GPU miners for best performance**: OpenCL or CUDA are 100-500x faster than CPU
-
-2. **For AMD integrated graphics**: Set realistic expectations - iGPUs are much slower than discrete GPUs
-
-3. **Multi-GPU mining**: Run multiple instances with different platform/device IDs:
-
-   **Terminal 1: NVIDIA GPU**
-   ```bash
-   ../bin/opencl_miner 0 0
-   ```
-
-   **Terminal 2: AMD GPU**
-   ```bash
-   export RUSTICL_ENABLE=radeonsi
-   ../bin/opencl_miner 1 0
-   ```
-
-4. **CPU mining**: Use OpenMP versions (example `make run-avx2-openmp`) for best multi-core performance
-
----
-
-## License
-
-Academic project for AAD course 2025/2026.
-
----
