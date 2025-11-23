@@ -68,7 +68,7 @@ static inline int handle_coin_found(int *total_coins)
         MPI_Recv(&msg, sizeof(coin_message_t), MPI_BYTE, status.MPI_SOURCE, TAG_COIN_FOUND, MPI_COMM_WORLD, &status);
 
         (*total_coins)++;
-        printf("\n💰 COIN #%d (Worker %d)\n", *total_coins, msg.worker_rank);
+        printf("\n[*] COIN #%d (Worker %d)\n", *total_coins, msg.worker_rank);
 
         save_coin(msg.coin_data);
         save_coin(NULL);  // Flush immediately so coins aren't lost on SIGINT
@@ -159,7 +159,7 @@ static inline void run_master(int num_workers, int time_limit)
         worker_hashes[w] = 0;
     }
 
-    printf("🚀 Starting MPI mining with %d workers\n", num_workers);
+    printf(">>> Starting MPI mining with %d workers\n", num_workers);
     printf("============================================================\n");
 
     distribute_initial_work(num_workers, &next_counter);

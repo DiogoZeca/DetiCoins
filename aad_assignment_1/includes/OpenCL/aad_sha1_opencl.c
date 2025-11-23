@@ -101,7 +101,7 @@ int main(int argc, char **argv)
   
   u32_t *host_coins_buffer = (u32_t *)malloc(COINS_BUFFER_SIZE * sizeof(u32_t));
   
-  printf("🚀 Starting OpenCL mining\n");
+  printf(">>> Starting OpenCL mining\n");
   printf("============================================================\n");
   printf("GPU: %s\n", ctx.device_name);
 
@@ -166,7 +166,7 @@ int main(int argc, char **argv)
             if(hash[0] == 0xAAD20250u)
             {
               coins_found++;
-              printf("\n💰 COIN #%d (OpenCL)\n", coins_found);
+              printf("\n[*] COIN #%d (OpenCL)\n", coins_found);
               save_coin(coin_data);
             }
           }
