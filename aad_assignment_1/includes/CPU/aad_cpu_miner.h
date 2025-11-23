@@ -84,7 +84,7 @@ static inline void mine_cpu_coins(const coin_config_t *config) {
 
             if (valid) {
                 coins_found++;
-                printf("\n%s COIN #%d\n", config->emoji, coins_found);
+                printf("\n%s COIN #%d\n", (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found);
                 save_coin(coin);
             }
         }

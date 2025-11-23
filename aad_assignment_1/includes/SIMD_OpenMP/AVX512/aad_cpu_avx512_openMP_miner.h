@@ -144,7 +144,7 @@ static inline void check_and_save_coins_avx512(v16si coin[14], v16si hash[5], co
                 #pragma omp critical
                 {
                     printf("\n%s COIN #%d (Thread %d, Lane %d)\n",
-                           config->emoji, coins_found, omp_get_thread_num(), lane);
+                           (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found, omp_get_thread_num(), lane);
                     save_coin(coin_scalar);
                 }
             }

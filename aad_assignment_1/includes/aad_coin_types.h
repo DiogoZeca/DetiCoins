@@ -11,28 +11,17 @@ typedef enum {
 } coin_type_t;
 
 
-// Coin structure
+// Coin configuration structure
 typedef struct {
     coin_type_t type;
     const char *custom_text;
-    const char *emoji;
-    const char *label;
 } coin_config_t;
 
-//coin configuration
+// Initialize coin configuration
 static inline coin_config_t coin_config_init(coin_type_t type, const char *custom_text) {
     coin_config_t config;
     config.type = type;
     config.custom_text = custom_text;
-
-    if (type == COIN_TYPE_CUSTOM) {
-        config.emoji = "[+]";
-        config.label = "CUSTOM";
-    } else {
-        config.emoji = "[*]";
-        config.label = "DETI";
-    }
-
     return config;
 }
 

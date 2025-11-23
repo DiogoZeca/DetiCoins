@@ -115,7 +115,7 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
 
                         if (hash[0] == 0xAAD20250u) {
                             coins_found++;
-                            printf("\n%s COIN #%d (GPU)\n", config->emoji, coins_found);
+                            printf("\n%s COIN #%d (GPU)\n", (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found);
                             save_coin(coin_data);
                         }
                     }

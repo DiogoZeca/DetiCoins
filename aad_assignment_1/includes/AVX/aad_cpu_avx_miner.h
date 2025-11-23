@@ -113,7 +113,7 @@ static inline void check_and_save_coins_avx(v4si coin[14], v4si hash[5], const c
 
             if (valid) {
                 coins_found++;
-                printf("\n%s COIN #%d (Lane %d)\n", config->emoji, coins_found, lane);
+                printf("\n%s COIN #%d (Lane %d)\n", (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found, lane);
                 save_coin(coin_scalar);
             }
         }

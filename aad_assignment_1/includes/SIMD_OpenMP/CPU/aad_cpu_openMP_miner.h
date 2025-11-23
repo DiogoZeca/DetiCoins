@@ -97,7 +97,7 @@ static inline void mine_cpu_coins_openmp(const coin_config_t *config) {
 
                     #pragma omp critical
                     {
-                        printf("\n%s COIN #%d (Thread %d)\n", config->emoji, coins_found, thread_id);
+                        printf("\n%s COIN #%d (Thread %d)\n", (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found, thread_id);
                         save_coin(coin);
                     }
                 }
