@@ -1,13 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// MPI Client/Server DETI Coin Miner - Main Entry Point
-//
-// Build: mpicc -O3 -march=native -fopenmp aad_sha1_mpi_miner.c -o mpi_miner
-// Run:   mpirun -np 5 ./mpi_miner [time_seconds]
-//        (1 master + 4 workers)
-//
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +7,7 @@
 #include "aad_mpi_master.h"
 #include "aad_mpi_worker.h"
 
-#define DEFAULT_TIME_LIMIT 0  // 0 = unlimited (Ctrl+C to stop)
+#define DEFAULT_TIME_LIMIT 0  
 
 int main(int argc, char *argv[])
 {
@@ -42,8 +32,6 @@ int main(int argc, char *argv[])
         MPI_Finalize();
         return 1;
     }
-
-    // Parse time limit argument
     int time_limit = DEFAULT_TIME_LIMIT;
     if (argc > 1) {
         time_limit = atoi(argv[1]);

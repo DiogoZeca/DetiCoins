@@ -1,9 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// WebAssembly DETI Coin Miner
-//
-
 #ifndef AAD_WASM_MINER_H
 #define AAD_WASM_MINER_H
 

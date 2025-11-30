@@ -1,9 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// WebAssembly SIMD DETI Coin Miner - Emscripten Entry Point
-//
-
 #include <emscripten.h>
 #include "aad_wasm_simd_miner.h"
 

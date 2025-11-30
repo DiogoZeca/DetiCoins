@@ -1,9 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// MPI Client/Server DETI Coin Miner - Master (Server) Logic
-//
-
 #ifndef AAD_MPI_MASTER_H
 #define AAD_MPI_MASTER_H
 
@@ -20,7 +14,8 @@
 #define MAX_WORKERS 256
 
 static volatile int master_stop_signal = 0;
-static u64_t worker_hashes[MAX_WORKERS] = {0};  // Per-worker cumulative hash counts
+// per-worker hash counts
+static u64_t worker_hashes[MAX_WORKERS] = {0}; 
 
 static void master_signal_handler(int sig)
 {
@@ -71,7 +66,8 @@ static inline int handle_coin_found(int *total_coins)
         printf("\n[*] COIN #%d (Worker %d)\n", *total_coins, msg.worker_rank);
 
         save_coin(msg.coin_data);
-        save_coin(NULL);  // Flush immediately so coins aren't lost on SIGINT
+        // Flush immediately so coins aren't lost
+        save_coin(NULL);   
         return 1;
     }
     return 0;
@@ -113,11 +109,7 @@ static inline int handle_stats_update(int num_workers, u64_t *total_hashes)
     if (flag) {
         stats_message_t stats;
         MPI_Recv(&stats, sizeof(stats_message_t), MPI_BYTE, status.MPI_SOURCE, TAG_STATS_UPDATE, MPI_COMM_WORLD, &status);
-
-        // Store per-worker cumulative count (REPLACE, not add!)
         worker_hashes[stats.worker_rank] = stats.hashes_done;
-
-        // Sum all worker hashes for total
         *total_hashes = 0;
         for (int w = 1; w <= num_workers; w++) {
             *total_hashes += worker_hashes[w];
@@ -153,8 +145,6 @@ static inline void run_master(int num_workers, int time_limit)
     int shutdown_sent = 0;
     time_t start_time = time(NULL);
     time_t last_print = start_time;
-
-    // Initialize worker hash counts
     for (int w = 0; w < MAX_WORKERS; w++) {
         worker_hashes[w] = 0;
     }
@@ -165,43 +155,31 @@ static inline void run_master(int num_workers, int time_limit)
     distribute_initial_work(num_workers, &next_counter);
 
     while (active_workers > 0) {
-        // Handle all pending messages
         while (handle_coin_found(&total_coins));
         while (handle_work_request(&next_counter, &active_workers));
         while (handle_stats_update(num_workers, &total_hashes));
         while (handle_worker_done(&active_workers));
 
-        // Check elapsed time
         time_t now = time(NULL);
         double elapsed = difftime(now, start_time);
-
-        // Check if time limit reached
         if (time_limit > 0 && elapsed >= (double)time_limit && !master_stop_signal) {
             printf("\n[Time limit reached (%d seconds)]\n", time_limit);
             master_stop_signal = 1;
         }
-
-        // Periodic status print (every 5 seconds, like AVX2_OpenMP)
         if (difftime(now, last_print) >= 5.0) {
             double hash_rate = (elapsed > 0) ? (total_hashes / elapsed / 1e6) : 0;
             printf("[%.0fs] %lu M @ %.2f MH/s | Coins: %d | Workers: %d\n",
                    elapsed, total_hashes / 1000000UL, hash_rate, total_coins, active_workers);
             last_print = now;
         }
-
-        // Handle stop signal (from time limit or Ctrl+C)
         if (master_stop_signal && !shutdown_sent) {
             printf("[Stopping all workers...]\n");
             broadcast_stop_signal(num_workers);
             shutdown_sent = 1;
         }
-
-        // Small sleep to avoid busy-waiting
-        struct timespec ts = {0, 100000};  // 0.1ms
+        struct timespec ts = {0, 100000};  
         nanosleep(&ts, NULL);
     }
-
-    // Flush all coins to vault file
     save_coin(NULL);
 
     double elapsed = difftime(time(NULL), start_time);

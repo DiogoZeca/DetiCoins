@@ -1,9 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// WebAssembly SIMD DETI Coin Miner (4-way parallel)
-//
-
 #ifndef AAD_WASM_SIMD_MINER_H
 #define AAD_WASM_SIMD_MINER_H
 

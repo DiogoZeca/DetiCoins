@@ -1,8 +1,3 @@
-#!/bin/bash
-#
-# WebAssembly DETI Coin Miner - Build Script
-# Requires: Emscripten (sudo apt install emscripten)
-#
 
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"

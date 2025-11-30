@@ -31,20 +31,16 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
         fprintf(histogram_file, "# kernel_time_ms coins_found\n");
     }
 
-    // Prepare custom text words for kernel
-    u32_t custom_words[8] = {0};  // Initialize to zeros (words 5-12)
+    // custom text
+    u32_t custom_words[8] = {0}; 
     u32_t timestamp_word_idx = 5;
 
     if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
         u32_t temp_coin[14] = {0};
         encode_custom_text(temp_coin, config->custom_text, 5);
-
-        // Extract custom text words (5-12)
         for (int i = 0; i < 8; i++) {
             custom_words[i] = temp_coin[5 + i];
         }
-
-        // Calculate timestamp position
         size_t text_len = strlen(config->custom_text);
         timestamp_word_idx = 5 + ((text_len + 3) / 4);
     }
@@ -55,7 +51,7 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
     cd.data_size[0] = COINS_BUFFER_SIZE * sizeof(u32_t);
     cd.data_size[1] = 0u;
 
-    // Print startup message
+    // startup message
     if (config->type == COIN_TYPE_CUSTOM) {
         printf("[+] Starting CUSTOM coin mining (CUDA)...\n");
         printf("   Custom text: \"%s\"\n", config->custom_text);
@@ -86,17 +82,17 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
         cd.arg[1] = &base_value1;
         cd.arg[2] = &base_value2;
         cd.arg[3] = &iteration_counter;
-        cd.arg[4] = &custom_words[0];  // word 5
-        cd.arg[5] = &custom_words[1];  // word 6
-        cd.arg[6] = &custom_words[2];  // word 7
-        cd.arg[7] = &custom_words[3];  // word 8
-        cd.arg[8] = &custom_words[4];  // word 9
-        cd.arg[9] = &custom_words[5];  // word 10
-        cd.arg[10] = &custom_words[6]; // word 11
-        cd.arg[11] = &custom_words[7]; // word 12
+        cd.arg[4] = &custom_words[0];  
+        cd.arg[5] = &custom_words[1];  
+        cd.arg[6] = &custom_words[2];  
+        cd.arg[7] = &custom_words[3];  
+        cd.arg[8] = &custom_words[4];  
+        cd.arg[9] = &custom_words[5];  
+        cd.arg[10] = &custom_words[6]; 
+        cd.arg[11] = &custom_words[7]; 
         cd.arg[12] = &timestamp_word_idx;
 
-        // Measure kernel execution time
+        // kernel execution time
         struct timespec kernel_start, kernel_end;
         clock_gettime(CLOCK_MONOTONIC, &kernel_start);
 
@@ -125,11 +121,9 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
                             break;
                         }
                     }
-
                     if (valid) {
                         u32_t hash[5];
                         sha1(coin_data, hash);
-
                         if (hash[0] == 0xAAD20250u) {
                             coins_found++;
                             coins_this_kernel++;
@@ -141,7 +135,6 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
             }
         }
 
-        // Log histogram data
         if (histogram_file != NULL) {
             fprintf(histogram_file, "%.3f %u\n", kernel_time_ms, coins_this_kernel);
             fflush(histogram_file);

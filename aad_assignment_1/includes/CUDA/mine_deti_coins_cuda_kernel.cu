@@ -1,7 +1,4 @@
-//
-// CUDA Kernel for Mining DETI Coins (with Custom Text Support)
-//
-
+// CUDA Kernel 
 #include "../aad_sha1.h"
 
 typedef unsigned int u32_t;
@@ -32,16 +29,15 @@ void mine_deti_coins_cuda_kernel(
     n = (u32_t)threadIdx.x + (u32_t)blockDim.x * (u32_t)blockIdx.x;
     u64_t counter = (u64_t)iteration_offset + (u64_t)n;
 
-    // Common prefix: "DETI coin 2 "
+    // prefix
     data[0] = 0x44455449u;
     data[1] = 0x20636F69u;
     data[2] = 0x6E203220u;
 
-    // Counter (64-bit)
     data[3] = (u32_t)(counter & 0xFFFFFFFFu);
     data[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
 
-    // Custom text words (broadcast from host)
+    // Custom text 
     data[5] = custom_word5;
     data[6] = custom_word6;
     data[7] = custom_word7;
@@ -51,10 +47,7 @@ void mine_deti_coins_cuda_kernel(
     data[11] = custom_word11;
     data[12] = custom_word12;
 
-    // Timestamp at designated position
     data[timestamp_word_idx] = base_value1;
-
-    // SHA-1 padding
     data[13] = 0x00000A80u;
 
     {
@@ -76,7 +69,6 @@ void mine_deti_coins_cuda_kernel(
     if(hash[0] == 0xAAD20250u)
     {
         idx = atomicAdd(coins_storage_area, 14u);
-        
         if(idx + 14u <= 1024u)
         {
             for(u32_t i = 0; i < 14u; i++)

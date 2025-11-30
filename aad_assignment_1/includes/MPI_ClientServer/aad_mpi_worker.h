@@ -1,9 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// MPI Client/Server DETI Coin Miner - Worker (Slave) Logic
-//
-
 #ifndef AAD_MPI_WORKER_H
 #define AAD_MPI_WORKER_H
 
@@ -136,8 +130,6 @@ static inline void send_stats_to_master(u64_t hashes, int coins, int worker_rank
 static inline void run_worker(int worker_rank, int num_workers)
 {
     (void)num_workers;
-
-    // Ignore SIGINT in workers - let master handle it
     signal(SIGINT, SIG_IGN);
 
     work_range_t work;
@@ -169,7 +161,6 @@ static inline void run_worker(int worker_rank, int num_workers)
                 #pragma omp barrier
                 #pragma omp single
                 {
-                    // Check for stop signal or request more work
                     if (check_stop_signal()) {
                         worker_stop_signal = 1;
                     } else {
@@ -182,8 +173,6 @@ static inline void run_worker(int worker_rank, int num_workers)
                 #pragma omp barrier
 
                 if (worker_stop_signal) break;
-
-                // Recalculate work distribution
                 range_size = work.end_counter - work.start_counter;
                 chunk_size = range_size / num_threads;
                 my_start = work.start_counter + thread_id * chunk_size;
@@ -202,13 +191,9 @@ static inline void run_worker(int worker_rank, int num_workers)
 
             counter += 8;
             local_hashes += 8;
-
-            // Periodic updates (every ~1M hashes per thread)
             if (__builtin_expect((local_hashes & 0xFFFFF) == 0, 0)) {
                 #pragma omp atomic
                 total_hashes += 0x100000;
-
-                // Thread 0 checks for stop signal and sends stats
                 if (thread_id == 0) {
                     time_t now = time(NULL);
                     if (difftime(now, last_check) >= 1.0) {
@@ -217,7 +202,6 @@ static inline void run_worker(int worker_rank, int num_workers)
                         }
                         last_check = now;
                     }
-                    // Send stats every 2 seconds for accurate master display
                     if (difftime(now, last_stats) >= 2.0) {
                         send_stats_to_master(total_hashes, total_coins, worker_rank);
                         last_stats = now;
@@ -225,19 +209,13 @@ static inline void run_worker(int worker_rank, int num_workers)
                 }
             }
         }
-
-        // Final hash count
         u64_t remainder = local_hashes & 0xFFFFF;
         if (remainder > 0) {
             #pragma omp atomic
             total_hashes += remainder;
         }
     }
-
-    // Send final stats and signal we're done
     send_stats_to_master(total_hashes, total_coins, worker_rank);
-
-    // Tell master we're finished
     int done = worker_rank;
     MPI_Send(&done, 1, MPI_INT, MPI_MASTER_RANK, TAG_WORKER_DONE, MPI_COMM_WORLD);
 }

@@ -11,10 +11,8 @@ void handle_sigint(int sig) {
 
 int main(int argc, char *argv[]) {
     coin_config_t config;
-
-    // Parse command-line arguments
     if (argc >= 2) {
-        // Custom coin with user-provided text
+        // Custom coin 
         const char *custom_text = argv[1];
 
         if (!validate_custom_text(custom_text)) {
@@ -29,7 +27,7 @@ int main(int argc, char *argv[]) {
 
         config = coin_config_init(COIN_TYPE_CUSTOM, custom_text);
     } else {
-        // Default: standard DETI coins
+        // Default coin
         config = coin_config_init(COIN_TYPE_DETI, NULL);
     }
 

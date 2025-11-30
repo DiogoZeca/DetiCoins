@@ -1,8 +1,3 @@
-//
-// Arquiteturas de Alto Desempenho 2025/2026
-//
-// MPI Client/Server DETI Coin Miner - Common Definitions
-//
 
 #ifndef AAD_MPI_COMMON_H
 #define AAD_MPI_COMMON_H

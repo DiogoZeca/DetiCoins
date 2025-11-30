@@ -16,44 +16,32 @@
 static volatile int stop_signal = 0;
 static volatile int coins_found = 0;
 
-//
-// Generate coin with optional custom text
-// Option B: custom text placed after counter
-//
+// optional custom text
 static inline void generate_coin_counter(u32_t coin[14], u64_t counter, const coin_config_t *config) {
-    // Common prefix (words 0-2): "DETI coin 2 "
     coin[0] = 0x44455449u;  // "DETI"
     coin[1] = 0x20636F69u;  // " coi"
     coin[2] = 0x6E203220u;  // "n 2 "
 
-    // Counter (words 3-4): always same position
     coin[3] = (u32_t)(counter & 0xFFFFFFFFu);
     coin[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
 
-    int next_word = 5;  // Next available word index
+    int next_word = 5;  /
 
-    // Custom text (if CUSTOM type)
+    // if CUSTOM
     if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
         next_word = encode_custom_text(coin, config->custom_text, 5);
     }
-
-    // Timestamp (after custom text, or word 5 if no custom text)
     coin[next_word] = (u32_t)time(NULL);
     next_word++;
-
-    // Zero remaining words
     for (int i = next_word; i < 13; i++) {
         coin[i] = 0u;
     }
-
-    // SHA-1 padding (word 13): always last
     coin[13] = 0x00000A80u;
 }
 
 static inline void mine_cpu_coins_openmp(const coin_config_t *config) {
     int num_threads = omp_get_max_threads();
-
-    // Print startup message
+    // startup message
     if (config->type == COIN_TYPE_CUSTOM) {
         printf("[+] Starting CUSTOM coin mining (CPU OpenMP, %d threads)...\n", num_threads);
         printf("   Custom text: \"%s\"\n", config->custom_text);
@@ -73,24 +61,19 @@ static inline void mine_cpu_coins_openmp(const coin_config_t *config) {
         u64_t local_counter = 0;
         u64_t thread_offset = (u64_t)thread_id * 1000000000ULL;
         time_t last_print = start;
-
         while (!stop_signal) {
             u64_t counter = thread_offset + local_counter;
-
             generate_coin_counter(coin, counter, config);
             sha1(coin, hash);
-
             if (__builtin_expect(hash[0] == 0xAAD20250u, 0)) {
                 u08_t *base_coin = (u08_t *)coin;
                 int valid = 1;
-
                 for (int i = 12; i < 54; i++) {
                     if (base_coin[i ^ 3] == '\n') {
                         valid = 0;
                         break;
                     }
                 }
-
                 if (valid) {
                     #pragma omp atomic
                     coins_found++;
@@ -104,14 +87,10 @@ static inline void mine_cpu_coins_openmp(const coin_config_t *config) {
             }
 
             local_counter++;
-
-            // Update shared counter periodically
             if (__builtin_expect((local_counter & 0xFFFFF) == 0, 0)) {
                 #pragma omp atomic
                 total_attempts += 0x100000;
             }
-
-            // Progress reporting (master thread only)
             if (thread_id == 0 && __builtin_expect((local_counter & 0xFFFFF) == 0, 0)) {
                 time_t now = time(NULL);
                 double elapsed = difftime(now, start);
@@ -133,8 +112,6 @@ static inline void mine_cpu_coins_openmp(const coin_config_t *config) {
                 }
             }
         }
-
-        // Final accumulation
         u64_t remainder = local_counter & 0xFFFFF;
         if (remainder > 0) {
             #pragma omp atomic
