@@ -25,7 +25,7 @@ static inline void generate_coin_counter(u32_t coin[14], u64_t counter, const co
     coin[3] = (u32_t)(counter & 0xFFFFFFFFu);
     coin[4] = (u32_t)((counter >> 32) & 0xFFFFFFFFu);
 
-    int next_word = 5;  /
+    int next_word = 5;
 
     // if CUSTOM
     if (config->type == COIN_TYPE_CUSTOM && config->custom_text != NULL) {
