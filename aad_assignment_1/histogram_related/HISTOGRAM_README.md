@@ -6,9 +6,11 @@ This generates the **required histograms** for the AAD assignment:
 2. **Coins Found Histogram** - Distribution of coins found per kernel run
 
 ## Requirements
+
+**Option A - Graphical Histograms (Recommended):**
 Install Python dependencies:
 ```bash
-pip install matplotlib numpy
+pip3 install matplotlib numpy
 ```
 
 Or:
@@ -16,14 +18,19 @@ Or:
 sudo apt install python3-matplotlib python3-numpy
 ```
 
-## Step 1: Run CUDA Miner to Collect Data
+**Option B - Text-Based Histograms:**
+No installation needed! Use `generate_cuda_histograms_text.py` for ASCII-based output.
 
-The CUDA miner has been modified to automatically log histogram data.
+## Quick Usage
 
-Run the miner for at least 1-2 minutes:
+### Step 1: Run CUDA Miner to Collect Data
+
+The CUDA miner automatically logs histogram data to `includes/cuda_histogram_data.txt`.
+
 ```bash
 cd includes
 make run-cuda
+# Let it run for 1-2 minutes, then press Ctrl+C
 ```
 
 Or with custom coins:
@@ -31,27 +38,51 @@ Or with custom coins:
 make run-cuda CUSTOM="YOUR_NAME"
 ```
 
-Let it run for a while (Ctrl+C to stop). The miner will create `cuda_histogram_data.txt` with the format:
+Data file format created in `includes/cuda_histogram_data.txt`:
 ```
 # CUDA Kernel Histogram Data
 # kernel_time_ms coins_found
-12.345 0
-11.987 1
-12.123 0
+1.250 0
+1.248 1
+1.252 0
 ...
 ```
 
-## Step 2: Generate Histograms
+### Step 2: Generate Histograms
 
-Run the Python script:
+The scripts automatically find the data file regardless of where you run them from.
+
+**Graphical Histograms (requires matplotlib):**
 ```bash
-cd ..  # Go to aad_assignment_1 directory
+# From project root
+python3 histogram_related/generate_cuda_histograms.py
+
+# Or from histogram_related/ directory
+cd histogram_related
 python3 generate_cuda_histograms.py
 ```
 
-This will create two PNG files:
+**Text-Based Histograms (no dependencies):**
+```bash
+# From project root
+python3 histogram_related/generate_cuda_histograms_text.py
+
+# Or from histogram_related/ directory
+cd histogram_related
+python3 generate_cuda_histograms_text.py
+```
+
+## Output Files
+
+### Graphical Output (`generate_cuda_histograms.py`)
+Creates two PNG files:
 - `cuda_kernel_time_histogram.png` - Kernel execution time distribution
 - `cuda_coins_found_histogram.png` - Coins found per kernel distribution
+
+### Text Output (`generate_cuda_histograms_text.py`)
+Creates:
+- `cuda_histogram_report.txt` - Statistical summary report
+- Console output with ASCII bar charts
 
 ## Output Files
 

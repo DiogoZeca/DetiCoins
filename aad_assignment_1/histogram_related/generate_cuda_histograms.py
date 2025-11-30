@@ -9,11 +9,45 @@ Generates two histograms:
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+import os
 
-def load_histogram_data(filename='cuda_histogram_data.txt'):
+def find_histogram_data_file():
+    """Find histogram data file in multiple possible locations."""
+    # Get the script's directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    possible_paths = [
+        'cuda_histogram_data.txt',                                    # Current working directory
+        os.path.join(script_dir, 'cuda_histogram_data.txt'),         # Same dir as script
+        os.path.join(script_dir, '../includes/cuda_histogram_data.txt'),  # includes/ from script location
+        'includes/cuda_histogram_data.txt',                          # From root directory
+    ]
+
+    for path in possible_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            print(f"Found data file at: {abs_path}")
+            return abs_path
+
+    return None
+
+def load_histogram_data(filename=None):
     """Load kernel timing and coin count data from file."""
     kernel_times = []
     coins_found = []
+
+    if filename is None:
+        filename = find_histogram_data_file()
+
+    if filename is None:
+        print("Error: Could not find 'cuda_histogram_data.txt' in any expected location!")
+        print("Searched in:")
+        print("  - Current directory")
+        print("  - ../includes/")
+        print("  - includes/")
+        print("\nPlease run the CUDA miner first to generate histogram data:")
+        print("  cd includes && make run-cuda")
+        sys.exit(1)
 
     try:
         with open(filename, 'r') as f:
@@ -86,9 +120,13 @@ def plot_kernel_time_histogram(kernel_times):
              horizontalalignment='right',
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
+    # Save to script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, 'cuda_kernel_time_histogram.png')
+
     plt.tight_layout()
-    plt.savefig('cuda_kernel_time_histogram.png', dpi=300, bbox_inches='tight')
-    print(f"Saved: cuda_kernel_time_histogram.png")
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
     print(f"  Mean time: {mean_time:.3f} ms")
     print(f"  Median time: {median_time:.3f} ms")
     print(f"  Std deviation: {std_time:.3f} ms")
@@ -146,9 +184,13 @@ def plot_coins_found_histogram(coins_found):
              horizontalalignment='right',
              bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.5))
 
+    # Save to script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, 'cuda_coins_found_histogram.png')
+
     plt.tight_layout()
-    plt.savefig('cuda_coins_found_histogram.png', dpi=300, bbox_inches='tight')
-    print(f"\nSaved: cuda_coins_found_histogram.png")
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\nSaved: {output_path}")
     print(f"  Total coins found: {total_coins}")
     print(f"  Kernel runs: {total_kernels}")
     print(f"  Runs with coins: {kernels_with_coins} ({100*kernels_with_coins/total_kernels:.2f}%)")

@@ -6,12 +6,46 @@ Generates text-based histogram output that can be included in reports
 """
 
 import sys
+import os
 from collections import Counter
 
-def load_histogram_data(filename='cuda_histogram_data.txt'):
+def find_histogram_data_file():
+    """Find histogram data file in multiple possible locations."""
+    # Get the script's directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    possible_paths = [
+        'cuda_histogram_data.txt',                                    # Current working directory
+        os.path.join(script_dir, 'cuda_histogram_data.txt'),         # Same dir as script
+        os.path.join(script_dir, '../includes/cuda_histogram_data.txt'),  # includes/ from script location
+        'includes/cuda_histogram_data.txt',                          # From root directory
+    ]
+
+    for path in possible_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            print(f"Found data file at: {abs_path}\n")
+            return abs_path
+
+    return None
+
+def load_histogram_data(filename=None):
     """Load kernel timing and coin count data from file."""
     kernel_times = []
     coins_found = []
+
+    if filename is None:
+        filename = find_histogram_data_file()
+
+    if filename is None:
+        print("Error: Could not find 'cuda_histogram_data.txt' in any expected location!")
+        print("Searched in:")
+        print("  - Current directory")
+        print("  - ../includes/")
+        print("  - includes/")
+        print("\nPlease run the CUDA miner first to generate histogram data:")
+        print("  cd includes && make run-cuda")
+        sys.exit(1)
 
     try:
         with open(filename, 'r') as f:
@@ -128,7 +162,11 @@ def print_coins_found_histogram(coins_found):
 
 def save_report(kernel_times, coins_found):
     """Save a formatted text report."""
-    with open('cuda_histogram_report.txt', 'w') as f:
+    # Save to script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, 'cuda_histogram_report.txt')
+
+    with open(output_path, 'w') as f:
         f.write("CUDA PERFORMANCE HISTOGRAM ANALYSIS\n")
         f.write("=" * 70 + "\n\n")
 
@@ -156,7 +194,7 @@ def save_report(kernel_times, coins_found):
         f.write(f"Success rate:           {100*sum(1 for c in coins_found if c > 0)/len(coins_found):.4f}%\n")
         f.write(f"\nTheoretical probability: ~0.000000023% (1 in 2^32)\n")
 
-    print("Report saved to: cuda_histogram_report.txt")
+    print(f"Report saved to: {output_path}")
 
 def main():
     print("=" * 70)

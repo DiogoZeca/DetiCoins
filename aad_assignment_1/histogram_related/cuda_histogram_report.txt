@@ -1,0 +1,19 @@
+CUDA PERFORMANCE HISTOGRAM ANALYSIS
+======================================================================
+
+1. KERNEL EXECUTION TIME ANALYSIS
+----------------------------------------------------------------------
+Mean execution time:    1.238 ms
+Median execution time:  1.236 ms
+Min execution time:     1.209 ms
+Max execution time:     1.485 ms
+Total kernel runs:      10000
+
+2. COINS FOUND ANALYSIS
+----------------------------------------------------------------------
+Total coins found:      14
+Kernels with 0 coins:   9986
+Kernels with ≥1 coin:   14
+Success rate:           0.1400%
+
+Theoretical probability: ~0.000000023% (1 in 2^32)
