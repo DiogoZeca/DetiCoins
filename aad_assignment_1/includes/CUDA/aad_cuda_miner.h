@@ -24,6 +24,13 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
     u32_t base_value1, base_value2, iteration_counter;
     u64_t total_attempts = 0;
 
+    // Open histogram data file for logging
+    FILE *histogram_file = fopen("cuda_histogram_data.txt", "w");
+    if (histogram_file != NULL) {
+        fprintf(histogram_file, "# CUDA Kernel Histogram Data\n");
+        fprintf(histogram_file, "# kernel_time_ms coins_found\n");
+    }
+
     // Prepare custom text words for kernel
     u32_t custom_words[8] = {0};  // Initialize to zeros (words 5-12)
     u32_t timestamp_word_idx = 5;
@@ -89,10 +96,20 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
         cd.arg[11] = &custom_words[7]; // word 12
         cd.arg[12] = &timestamp_word_idx;
 
+        // Measure kernel execution time
+        struct timespec kernel_start, kernel_end;
+        clock_gettime(CLOCK_MONOTONIC, &kernel_start);
+
         lauch_kernel(&cd);
         device_to_host_copy(&cd, 0);
 
+        clock_gettime(CLOCK_MONOTONIC, &kernel_end);
+        double kernel_time_ms = (kernel_end.tv_sec - kernel_start.tv_sec) * 1000.0 +
+                               (kernel_end.tv_nsec - kernel_start.tv_nsec) / 1000000.0;
+
         u32_t next_free_idx = host_coins_buffer[0];
+        u32_t coins_this_kernel = 0;
+
         if (next_free_idx > 1u && next_free_idx <= COINS_BUFFER_SIZE) {
             u32_t coins = (next_free_idx - 1u) / 14u;
             for (u32_t i = 0; i < coins; i++) {
@@ -115,12 +132,19 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
 
                         if (hash[0] == 0xAAD20250u) {
                             coins_found++;
+                            coins_this_kernel++;
                             printf("\n%s COIN #%d (GPU)\n", (config->type == COIN_TYPE_CUSTOM ? "[+]" : "[*]"), coins_found);
                             save_coin(coin_data);
                         }
                     }
                 }
             }
+        }
+
+        // Log histogram data
+        if (histogram_file != NULL) {
+            fprintf(histogram_file, "%.3f %u\n", kernel_time_ms, coins_this_kernel);
+            fflush(histogram_file);
         }
 
         total_attempts += THREADS_PER_KERNEL_LAUNCH;
@@ -154,6 +178,12 @@ static inline void mine_cuda_coins(const coin_config_t *config) {
     printf("║ Average rate: %.2f M/s%-30s║\n", final_rate, "");
     printf("║ Coins found: %-37d ║\n", coins_found);
     printf("╚════════════════════════════════════════════════════════════╝\n");
+
+    // Close histogram file
+    if (histogram_file != NULL) {
+        fclose(histogram_file);
+        printf("\nHistogram data saved to: cuda_histogram_data.txt\n");
+    }
 
     terminate_cuda(&cd);
 }
